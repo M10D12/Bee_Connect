@@ -1,0 +1,49 @@
+{
+  "project_info": {
+    "project_number": "203331825003",
+    "firebase_url": "https://beeconnect-59497-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "beeconnect-59497",
+    "storage_bucket": "beeconnect-59497.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:203331825003:android:8cdbc625b61378ba0ab02e",
+        "android_client_info": {
+          "package_name": "com.example.beeconnect"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAOjRxVrOZJIp3XcfAdVkvu9F-HyLHopYo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:203331825003:android:39ca7ef5a76e58b70ab02e",
+        "android_client_info": {
+          "package_name": "com.example.sensorbox"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAOjRxVrOZJIp3XcfAdVkvu9F-HyLHopYo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
