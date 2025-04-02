@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "BeeConnect"
+rootProject.name = "BeeConnect2"
 include(":app")
  
