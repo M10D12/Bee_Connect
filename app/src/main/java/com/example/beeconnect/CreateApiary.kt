@@ -9,9 +9,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.Edit
+import android.view.View
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,16 +27,23 @@ import androidx.navigation.compose.rememberNavController
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import androidx.compose.ui.viewinterop.AndroidView
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
 
 @Composable
 fun CreateApiaryScreen(navController: NavController) {
-    var apiaryName by remember { mutableStateOf("Example apiary name") }
+    var apiaryName by remember { mutableStateOf("") }
     var address by remember { mutableStateOf(TextFieldValue("")) }
     var selectedEnv by remember { mutableStateOf("Suburbano") }
+    var latitude by remember { mutableStateOf("36.21367483") }
+    var longitude by remember { mutableStateOf("-56.9846634") }
 
     val scrollState = rememberScrollState()
     val context = LocalContext.current
-
 
     Scaffold(
         topBar = { BeeConnectTopBar() },
@@ -52,25 +57,16 @@ fun CreateApiaryScreen(navController: NavController) {
                 .padding(16.dp)
         ) {
             Text("Criação do Apiário", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Text("Welcome, UserX!", fontSize = 16.sp)
-
             Spacer(modifier = Modifier.height(16.dp))
 
             Text("Nome do Apiário")
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .background(Color(0xFFFFC107), shape = RoundedCornerShape(8.dp))
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                Text(apiaryName, modifier = Modifier.weight(1f))
-                IconButton(onClick = {
-                    apiaryName = "Novo nome do apiário"
-                }) {
-                    Icon(Icons.Default.Edit, contentDescription = "Editar nome")
-                }
-            }
+            OutlinedTextField(
+                value = apiaryName,
+                onValueChange = { apiaryName = it },
+                placeholder = { Text("Nome do apiário") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp)
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -92,22 +88,6 @@ fun CreateApiaryScreen(navController: NavController) {
                         onClick = { selectedEnv = label }
                     )
                 }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-                    .background(Color.Gray),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Map,
-                    contentDescription = "Mapa",
-                    modifier = Modifier.size(100.dp)
-                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -134,8 +114,8 @@ fun CreateApiaryScreen(navController: NavController) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 OutlinedTextField(
-                    value = "36.21367483",
-                    onValueChange = {},
+                    value = latitude,
+                    onValueChange = { latitude = it },
                     label = { Text("Latitude") },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(8.dp),
@@ -146,8 +126,8 @@ fun CreateApiaryScreen(navController: NavController) {
                 )
 
                 OutlinedTextField(
-                    value = "-56.9846634",
-                    onValueChange = {},
+                    value = longitude,
+                    onValueChange = { longitude = it },
                     label = { Text("Longitude") },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(8.dp),
@@ -156,6 +136,56 @@ fun CreateApiaryScreen(navController: NavController) {
                         unfocusedBorderColor = Color(0xFFFFC107)
                     )
                 )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(12.dp))
+            ) {
+                AndroidView(
+                    factory = { ctx ->
+                        try {
+                            val appContext = ctx.applicationContext
+                            val sharedPrefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(appContext)
+                            Configuration.getInstance().load(appContext, sharedPrefs)
+
+                            // Cria o MapView corretamente
+                            MapView(appContext).apply {
+                                setTileSource(TileSourceFactory.MAPNIK)
+                                setMultiTouchControls(true)
+                                controller.setZoom(15.0)
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            // Em caso de falha, devolve uma View vazia (evita crash)
+                            View(ctx)
+                        }
+                    },
+                    update = { mapView ->
+                        if (mapView is MapView) {
+                            val lat = latitude.toDoubleOrNull()
+                            val lon = longitude.toDoubleOrNull()
+                            if (lat != null && lon != null) {
+                                val point = GeoPoint(lat, lon)
+                                mapView.controller.setCenter(point)
+                                mapView.overlays.clear()
+                                val marker = Marker(mapView).apply {
+                                    position = point
+                                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                                    title = "Apiário"
+                                }
+                                mapView.overlays.add(marker)
+                                mapView.invalidate()
+                            }
+                        }
+                    }
+                )
+
+
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -168,8 +198,8 @@ fun CreateApiaryScreen(navController: NavController) {
                         "nome" to apiaryName,
                         "localizacao" to address.text,
                         "meio" to selectedEnv,
-                        "latitude" to "36.21367483",
-                        "longitude" to "-56.9846634",
+                        "latitude" to latitude,
+                        "longitude" to longitude,
                         "owner_id" to auth.currentUser?.uid
                     )
 
@@ -201,7 +231,6 @@ fun CreateApiaryScreen(navController: NavController) {
     }
 }
 
-
 @Composable
 fun EnvironmentOption(label: String, iconRes: Int, selected: Boolean, onClick: () -> Unit) {
     Column(
@@ -231,7 +260,7 @@ fun EnvironmentOption(label: String, iconRes: Int, selected: Boolean, onClick: (
 @Preview(showBackground = true)
 @Composable
 fun PreviewCreateApiaryScreen() {
-    MaterialTheme{
-    CreateApiaryScreen(navController = rememberNavController())
-        }
+    MaterialTheme {
+        CreateApiaryScreen(navController = rememberNavController())
+    }
 }
