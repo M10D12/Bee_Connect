@@ -32,8 +32,7 @@ fun LoginScreen(navController: NavController) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val context = LocalContext.current
-    val auth = Firebase.auth
-    val db = Firebase.firestore
+
 
     Box(
         modifier = Modifier
@@ -91,6 +90,8 @@ fun LoginScreen(navController: NavController) {
 
                 Button(
                     onClick = {
+                        val auth = Firebase.auth
+                        val db = Firebase.firestore
                         if (username.isNotBlank() && password.isNotBlank()) {
                             // Realizando o login no Firebase
                             auth.signInWithEmailAndPassword(username, password)

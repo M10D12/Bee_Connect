@@ -17,16 +17,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.firebase.firestore.FirebaseFirestore
 import androidx.navigation.NavController
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.auth.ktx.auth
+import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 
 @Composable
@@ -36,7 +37,8 @@ fun CreateApiaryScreen(navController: NavController) {
     var selectedEnv by remember { mutableStateOf("Suburbano") }
 
     val scrollState = rememberScrollState()
-    val firestore = FirebaseFirestore.getInstance()  // Firestore instance
+    val context = LocalContext.current
+
 
     Scaffold(
         topBar = { BeeConnectTopBar() },
@@ -64,7 +66,6 @@ fun CreateApiaryScreen(navController: NavController) {
             ) {
                 Text(apiaryName, modifier = Modifier.weight(1f))
                 IconButton(onClick = {
-                    // Example edit
                     apiaryName = "Novo nome do apiário"
                 }) {
                     Icon(Icons.Default.Edit, contentDescription = "Editar nome")
@@ -99,7 +100,8 @@ fun CreateApiaryScreen(navController: NavController) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(200.dp)
-                    .background(Color.Gray)
+                    .background(Color.Gray),
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Map,
@@ -133,7 +135,7 @@ fun CreateApiaryScreen(navController: NavController) {
             ) {
                 OutlinedTextField(
                     value = "36.21367483",
-                    onValueChange = { /* atualiza latitude */ },
+                    onValueChange = {},
                     label = { Text("Latitude") },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(8.dp),
@@ -145,7 +147,7 @@ fun CreateApiaryScreen(navController: NavController) {
 
                 OutlinedTextField(
                     value = "-56.9846634",
-                    onValueChange = { /* atualiza longitude */ },
+                    onValueChange = {},
                     label = { Text("Longitude") },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(8.dp),
@@ -160,21 +162,22 @@ fun CreateApiaryScreen(navController: NavController) {
 
             Button(
                 onClick = {
-                    // Save the Apiary to Firestore
+                    val auth = Firebase.auth
+                    val firestore = Firebase.firestore
                     val apiaryData = hashMapOf(
                         "nome" to apiaryName,
                         "localizacao" to address.text,
                         "meio" to selectedEnv,
-                        "latitude" to "36.21367483",  // Add dynamic value
-                        "longitude" to "-56.9846634", // Add dynamic value
-                        "owner_id" to Firebase.auth.currentUser?.uid
+                        "latitude" to "36.21367483",
+                        "longitude" to "-56.9846634",
+                        "owner_id" to auth.currentUser?.uid
                     )
 
                     firestore.collection("apiarios")
                         .add(apiaryData)
-                        .addOnSuccessListener { documentReference ->
+                        .addOnSuccessListener {
                             Toast.makeText(
-                                navController.context,
+                                context,
                                 "Apiário criado com sucesso!",
                                 Toast.LENGTH_SHORT
                             ).show()
@@ -182,7 +185,7 @@ fun CreateApiaryScreen(navController: NavController) {
                         }
                         .addOnFailureListener { e ->
                             Toast.makeText(
-                                navController.context,
+                                context,
                                 "Erro ao criar apiário: ${e.message}",
                                 Toast.LENGTH_LONG
                             ).show()
@@ -197,6 +200,7 @@ fun CreateApiaryScreen(navController: NavController) {
         }
     }
 }
+
 
 @Composable
 fun EnvironmentOption(label: String, iconRes: Int, selected: Boolean, onClick: () -> Unit) {
@@ -224,11 +228,10 @@ fun EnvironmentOption(label: String, iconRes: Int, selected: Boolean, onClick: (
     }
 }
 
-
-
-@Preview()
+@Preview(showBackground = true)
 @Composable
 fun PreviewCreateApiaryScreen() {
-    val navController = rememberNavController()
-    CreateApiaryScreen(navController)
+    MaterialTheme{
+    CreateApiaryScreen(navController = rememberNavController())
+        }
 }
