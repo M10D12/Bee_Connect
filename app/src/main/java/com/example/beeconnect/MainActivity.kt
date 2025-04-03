@@ -1,6 +1,7 @@
 package com.example.beeconnect
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -8,14 +9,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
-import com.google.firebase.FirebaseApp
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.foundation.Image
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,9 +24,14 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.compose.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.sp
+import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
 import org.osmdroid.config.Configuration
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.Scaffold
@@ -50,10 +55,10 @@ class MainActivity : ComponentActivity() {
                 composable("createApiary") {
                     CreateApiaryScreen(navController)
                 }
-                composable("login"){
+                composable("login") {
                     LoginScreen(navController)
                 }
-                composable("register"){
+                composable("register") {
                     RegisterScreen(navController)
                 }
             }
@@ -63,28 +68,64 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun BeeConnectApp(navController: NavController) {
+    val apiaries = remember { mutableStateListOf<Apiary>() }
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        val db = Firebase.firestore
+        val userId = Firebase.auth.currentUser?.uid
+
+        if (userId != null) {
+            db.collection("apiarios")
+                .whereEqualTo("owner_id", userId)
+                .get()
+                .addOnSuccessListener { result ->
+                    apiaries.clear()
+                    for (document in result) {
+                        val nome = document.getString("nome") ?: "Sem nome"
+                        val localizacao = document.getString("localizacao") ?: "Sem localização"
+
+                        apiaries.add(
+                            Apiary(
+                                name = nome,
+                                location = localizacao,
+                                imageRes = R.drawable.apiario,
+                                id = document.id
+                            )
+                        )
+                    }
+                }
+                .addOnFailureListener { e ->
+                    Toast.makeText(
+                        context,
+                        "Erro ao buscar apiários: ${e.message}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+        } else {
+            Toast.makeText(
+                context,
+                "Usuário não autenticado.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
     Scaffold(
         topBar = { BeeConnectTopBar() },
         bottomBar = { BeeConnectBottomNavigation() },
-
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            AddApiaryTopButton(navController) // ← Aqui está a chamada correta
+            AddApiaryTopButton(navController)
             Spacer(modifier = Modifier.height(8.dp))
-            ApiaryList(
-                listOf(
-                    Apiary("Apiário Lamego", "Lamego", R.drawable.imagem_exemplo),
-                    Apiary("Apiário Aveiro", "Aveiro", R.drawable.apiario)
-                )
-            )
+            ApiaryList(apiaries)
         }
     }
 }
-
 
 @Composable
 fun BeeConnectTopBar() {
@@ -101,8 +142,7 @@ fun BeeConnectTopBar() {
                 )
             }
         },
-
-                actions = {
+        actions = {
             IconButton(onClick = { /* Ação para abrir perfil */ }) {
                 Icon(Icons.Default.Person, contentDescription = "Perfil")
             }
@@ -126,16 +166,32 @@ fun AddApiaryTopButton(navController: NavController) {
 
 @Composable
 fun ApiaryList(apiaries: List<Apiary>) {
-    LazyColumn(
-        modifier = Modifier.fillMaxHeight(),
-        contentPadding = PaddingValues(16.dp)
-    ) {
-        items(apiaries.size) { index ->
-            ApiaryCard(apiary = apiaries[index])
-            Spacer(modifier = Modifier.height(16.dp))
+    if (apiaries.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Ainda não tens nenhum apiário registado 🐝",
+                fontSize = 18.sp,
+                color = Color.Gray
+            )
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxHeight(),
+            contentPadding = PaddingValues(16.dp)
+        ) {
+            items(apiaries.size) { index ->
+                ApiaryCard(apiary = apiaries[index])
+                Spacer(modifier = Modifier.height(16.dp))
+            }
         }
     }
 }
+
 
 @Composable
 fun ApiaryCard(apiary: Apiary) {
@@ -187,7 +243,6 @@ fun ApiaryCard(apiary: Apiary) {
     }
 }
 
-
 @Composable
 fun RoundedBlackButton(text: String, onClick: () -> Unit) {
     Button(
@@ -203,8 +258,6 @@ fun RoundedBlackButton(text: String, onClick: () -> Unit) {
     }
 }
 
-
-
 @Composable
 fun BeeConnectBottomNavigation() {
     BottomNavigation(
@@ -219,7 +272,7 @@ fun BeeConnectBottomNavigation() {
                     contentDescription = "Apiários"
                 )
             },
-            label = null, // Remove o texto
+            label = null,
             alwaysShowLabel = false
         )
         BottomNavigationItem(
@@ -246,8 +299,6 @@ fun BeeConnectBottomNavigation() {
             label = null,
             alwaysShowLabel = false
         )
-
-
         BottomNavigationItem(
             selected = false,
             onClick = { /* Navegar para configurações */ },
@@ -260,15 +311,14 @@ fun BeeConnectBottomNavigation() {
             label = null,
             alwaysShowLabel = false
         )
-
     }
 }
-
 
 data class Apiary(
     val name: String,
     val location: String,
-    val imageRes: Int? = null
+    val imageRes: Int? = null,
+    val id: String = "" // útil para futuras ações (editar, apagar)
 )
 
 @Preview(showBackground = true)
