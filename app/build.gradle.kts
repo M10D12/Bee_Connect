@@ -66,12 +66,17 @@ dependencies {
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-analytics-ktx")
+    implementation("com.google.firebase:firebase-messaging-ktx")
+    implementation ("com.google.firebase:firebase-messaging:23.3.1") 
+
 
 // Navigation
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
 // Compose
     implementation("androidx.compose.material:material:1.6.1")
+    implementation ("androidx.compose.material3:material3:1.1.1")
+
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
 

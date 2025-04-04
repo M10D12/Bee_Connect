@@ -26,6 +26,8 @@ import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.FirebaseApp
+import com.google.firebase.messaging.FirebaseMessaging
+import android.util.Log
 
 @Composable
 fun LoginScreen(navController: NavController) {
@@ -97,6 +99,29 @@ fun LoginScreen(navController: NavController) {
                             auth.signInWithEmailAndPassword(username, password)
                                 .addOnCompleteListener { task ->
                                     if (task.isSuccessful) {
+                                        FirebaseMessaging.getInstance().token
+                                            .addOnCompleteListener { tokenTask ->
+                                                if (tokenTask.isSuccessful) {
+                                                    val token = tokenTask.result
+                                                    Log.d("FCM", "Token: $token")
+
+                                                    // Guardar token no Firestore no documento do utilizador
+                                                    val userId = Firebase.auth.currentUser?.uid
+                                                    if (userId != null) {
+                                                        db.collection("users").document(userId)
+                                                            .update("fcmToken", token)
+                                                            .addOnSuccessListener {
+                                                                Log.d("FCM", "Token guardado com sucesso no Firestore")
+                                                            }
+                                                            .addOnFailureListener { e ->
+                                                                Log.e("FCM", "Erro ao guardar token: ${e.message}")
+                                                            }
+                                                    }
+                                                } else {
+                                                    Log.e("FCM", "Erro ao obter token FCM: ${tokenTask.exception?.message}")
+                                                }
+                                            }
+
                                         Toast.makeText(context, "Login bem-sucedido!", Toast.LENGTH_SHORT).show()
 
                                         // Acessando dados adicionais do usuário após o login bem-sucedido

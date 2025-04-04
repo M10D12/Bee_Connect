@@ -1,5 +1,7 @@
 package com.example.beeconnect
 
+
+import ColmeiaScreen
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -74,6 +76,12 @@ class MainActivity : ComponentActivity() {
                 composable("my_apiaries_map") {
                     MyApiariesMapScreen(navController)
                 }
+                composable("colmeiaScreen/{colmeiaId}") { backStackEntry ->
+                    val colmeiaId = backStackEntry.arguments?.getString("colmeiaId") ?: ""
+                    ColmeiaScreen(navController, colmeiaId)
+                }
+
+
 
             }
         }

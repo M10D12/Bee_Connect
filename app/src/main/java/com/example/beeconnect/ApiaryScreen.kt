@@ -68,8 +68,10 @@ fun ApiaryScreen(navController: NavController, apiaryId: String) {
                 for (document in result) {
                     val nome = document.getString("nome") ?: "Sem nome"
                     val imageRes = R.drawable.apiario
-                    colmeias.add(Colmeia(nome, imageRes))
+                    val id = document.id
+                    colmeias.add(Colmeia(nome, imageRes, id))
                 }
+
             }
             .addOnFailureListener {
                 Toast.makeText(context, "Erro ao buscar colmeias", Toast.LENGTH_SHORT).show()
@@ -183,7 +185,7 @@ fun ColmeiaCard(colmeia: Colmeia, navController: NavController) {
             Text(text = colmeia.nome, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(4.dp))
             Button(
-                onClick = { /* ação Ver mais */ },
+                onClick = {navController.navigate("colmeiaScreen/${colmeia.id}")  },
                 colors = ButtonDefaults.buttonColors(backgroundColor = Color.Black),
                 shape = RoundedCornerShape(50),
                 modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -194,7 +196,11 @@ fun ColmeiaCard(colmeia: Colmeia, navController: NavController) {
     }
 }
 
-data class Colmeia(val nome: String, val imageRes: Int)
+data class Colmeia(
+    val nome: String,
+    val imageRes: Int,
+    val id: String
+)
 
 @Preview(showBackground = true)
 @Composable

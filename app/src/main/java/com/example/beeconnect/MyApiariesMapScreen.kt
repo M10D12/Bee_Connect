@@ -81,22 +81,30 @@ fun MyApiariesMapScreen(navController: NavController) {
                     if (apiaries.isNotEmpty()) {
                         map.overlays.clear()
 
-                        val first = apiaries.first()
-                        map.controller.setCenter(GeoPoint(first.latitude.toDouble(), first.longitude.toDouble()))
+                        val geoPoints = apiaries.map {
+                            GeoPoint(it.latitude.toDouble(), it.longitude.toDouble())
+                        }
 
-                        apiaries.forEach { apiary ->
-                            val point = GeoPoint(apiary.latitude.toDouble(), apiary.longitude.toDouble())
+                        geoPoints.forEachIndexed { index, point ->
                             val marker = Marker(map).apply {
                                 position = point
-                                title = apiary.name
+                                title = apiaries[index].name
                                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                             }
                             map.overlays.add(marker)
                         }
 
+                        val boundingBox = org.osmdroid.util.BoundingBox.fromGeoPointsSafe(geoPoints)
+
+                        map.zoomToBoundingBox(boundingBox, false) // <– false para aplicar zoom depois
+                        map.controller.setCenter(boundingBox.centerWithDateLine)
+                        map.controller.setZoom(map.zoomLevelDouble - 1.5)
+
                         map.invalidate()
                     }
                 }
+
+
             )
         }
     }
