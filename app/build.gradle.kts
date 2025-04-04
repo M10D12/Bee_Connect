@@ -76,9 +76,11 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
 
 // Osmdroid (mapas)
-    implementation("org.osmdroid:osmdroid-android:6.1.16")
+    implementation("org.osmdroid:osmdroid-android:6.1.11")
     implementation(libs.androidx.preference.ktx)
     implementation("androidx.compose.material:material-icons-extended:1.6.1")
+
+
 
 
 

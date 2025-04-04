@@ -61,6 +61,14 @@ class MainActivity : ComponentActivity() {
                 composable("register") {
                     RegisterScreen(navController)
                 }
+                composable("createHive/{apiaryId}") { backStackEntry ->
+                    val apiaryId = backStackEntry.arguments?.getString("apiaryId") ?: ""
+                    CreateHiveScreen(navController, apiaryId)
+                }
+                composable("apiaryScreen/{apiaryId}") { backStackEntry ->
+                    val apiaryId = backStackEntry.arguments?.getString("apiaryId") ?: ""
+                    ApiaryScreen(navController, apiaryId)
+                }
             }
         }
     }
@@ -122,7 +130,7 @@ fun BeeConnectApp(navController: NavController) {
         ) {
             AddApiaryTopButton(navController)
             Spacer(modifier = Modifier.height(8.dp))
-            ApiaryList(apiaries)
+            ApiaryList(apiaries,navController)
         }
     }
 }
@@ -165,7 +173,7 @@ fun AddApiaryTopButton(navController: NavController) {
 }
 
 @Composable
-fun ApiaryList(apiaries: List<Apiary>) {
+fun ApiaryList(apiaries: List<Apiary>,navcontroller: NavController) {
     if (apiaries.isEmpty()) {
         Box(
             modifier = Modifier
@@ -185,7 +193,7 @@ fun ApiaryList(apiaries: List<Apiary>) {
             contentPadding = PaddingValues(16.dp)
         ) {
             items(apiaries.size) { index ->
-                ApiaryCard(apiary = apiaries[index])
+                ApiaryCard(apiary = apiaries[index], navController = navcontroller)
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
@@ -194,7 +202,7 @@ fun ApiaryList(apiaries: List<Apiary>) {
 
 
 @Composable
-fun ApiaryCard(apiary: Apiary) {
+fun ApiaryCard(apiary: Apiary, navController: NavController) {
     Card(
         shape = RoundedCornerShape(16.dp),
         elevation = 8.dp,
@@ -236,7 +244,7 @@ fun ApiaryCard(apiary: Apiary) {
                 contentAlignment = Alignment.Center
             ) {
                 RoundedBlackButton(text = "Ver mais") {
-                    // Ação ao clicar
+                    navController.navigate("apiaryScreen/${apiary.id}")
                 }
             }
         }
