@@ -1,7 +1,6 @@
 package com.example.beeconnect
 
 
-import ColmeiaScreen
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -80,6 +79,9 @@ class MainActivity : ComponentActivity() {
                     val colmeiaId = backStackEntry.arguments?.getString("colmeiaId") ?: ""
                     ColmeiaScreen(navController, colmeiaId)
                 }
+                composable("profile"){
+                    RealProfileScreen(navController = navController)
+                }
 
 
 
@@ -139,7 +141,7 @@ fun BeeConnectApp(navController: NavController) {
     }
 
     Scaffold(
-        topBar = { BeeConnectTopBar() },
+        topBar = { BeeConnectTopBar(navController) },
         bottomBar = { BeeConnectBottomNavigation(navController = navController) },
     ) { paddingValues ->
         Column(
@@ -155,7 +157,7 @@ fun BeeConnectApp(navController: NavController) {
 }
 
 @Composable
-fun BeeConnectTopBar() {
+fun BeeConnectTopBar(navController: NavController) {
     TopAppBar(
         title = { Text("BeeConnect") },
         backgroundColor = Color(0xFFFFC107),
@@ -170,7 +172,7 @@ fun BeeConnectTopBar() {
             }
         },
         actions = {
-            IconButton(onClick = { /* Ação para abrir perfil */ }) {
+            IconButton(onClick = { navController.navigate("profile")}) {
                 Icon(Icons.Default.Person, contentDescription = "Perfil")
             }
         }

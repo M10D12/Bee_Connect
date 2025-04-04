@@ -1,4 +1,5 @@
-// Imports permanecem os mesmos
+package com.example.beeconnect
+
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.widget.Toast
@@ -16,8 +17,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.beeconnect.BeeConnectBottomNavigation
-import com.example.beeconnect.BeeConnectTopBar
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.tasks.await
@@ -66,7 +65,6 @@ fun ColmeiaScreen(navController: NavController, colmeiaId: String) {
     var expanded by remember { mutableStateOf(false) }
     val typeOptions = listOf("Langstroth", "Lusitano", "Reversível", "Industrial (dadant)")
 
-    // Load data
     LaunchedEffect(colmeiaId) {
         try {
             val doc = db.collection("colmeia").document(colmeiaId).get().await()
@@ -90,7 +88,7 @@ fun ColmeiaScreen(navController: NavController, colmeiaId: String) {
     }
 
     Scaffold(
-        topBar = { BeeConnectTopBar() },
+        topBar = { BeeConnectTopBar(navController) },
         bottomBar = { BeeConnectBottomNavigation(navController) }
     ) { padding ->
         LazyColumn(
@@ -208,7 +206,20 @@ fun ColmeiaScreen(navController: NavController, colmeiaId: String) {
 
                             if (proximaVisita.isNotBlank()) {
                                 inspecao["proxima_visita"] = proximaVisita
+
+                                // Converter a data para millis (ajusta conforme o teu formato)
+                                val formatter = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+                                val date = formatter.parse(proximaVisita)
+                                date?.let {
+                                    NotificationScheduler.scheduleNotification(
+                                        context = context,
+                                        dateTimeMillis = it.time,
+                                        title = "Inspeção Programada",
+                                        message = "Está na hora de visitar a colmeia $nome 🐝"
+                                    )
+                                }
                             }
+
 
                             db.collection("colmeia").document(colmeiaId)
                                 .collection("inspecoes")

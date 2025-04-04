@@ -45,7 +45,7 @@ fun CreateApiaryScreen(navController: NavController) {
     val context = LocalContext.current
 
     Scaffold(
-        topBar = { BeeConnectTopBar() },
+        topBar = { BeeConnectTopBar(navController) },
         bottomBar = { BeeConnectBottomNavigation(navController) }
     ) { paddingValues ->
         if (isMapExpanded) {

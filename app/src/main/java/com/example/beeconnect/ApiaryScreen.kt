@@ -79,7 +79,7 @@ fun ApiaryScreen(navController: NavController, apiaryId: String) {
     }
 
     Scaffold(
-        topBar = { BeeConnectTopBar() },
+        topBar = { BeeConnectTopBar(navController) },
         bottomBar = { BeeConnectBottomNavigation(navController) },
     ) { padding ->
         Column(

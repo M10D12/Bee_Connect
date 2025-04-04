@@ -40,6 +40,9 @@
             </intent-filter>
         </service>
 
+        <!-- Broadcast Receiver para notificações locais -->
+        <receiver android:name=".NotificationReceiver" android:exported="false" />
+
     </application>
 
 </manifest>

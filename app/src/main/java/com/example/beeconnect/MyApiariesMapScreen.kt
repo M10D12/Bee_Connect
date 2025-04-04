@@ -57,7 +57,7 @@ fun MyApiariesMapScreen(navController: NavController) {
     }
 
     Scaffold(
-        topBar = { BeeConnectTopBar() },
+        topBar = { BeeConnectTopBar(navController) },
         bottomBar = { BeeConnectBottomNavigation(navController) }
     ) { paddingValues ->
         Box(modifier = Modifier
