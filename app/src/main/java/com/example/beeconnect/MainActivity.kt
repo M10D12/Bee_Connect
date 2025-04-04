@@ -35,6 +35,7 @@ import com.google.firebase.ktx.Firebase
 import org.osmdroid.config.Configuration
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.Scaffold
+import com.example.beeconnect.models.Apiary
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -69,6 +70,11 @@ class MainActivity : ComponentActivity() {
                     val apiaryId = backStackEntry.arguments?.getString("apiaryId") ?: ""
                     ApiaryScreen(navController, apiaryId)
                 }
+
+                composable("my_apiaries_map") {
+                    MyApiariesMapScreen(navController)
+                }
+
             }
         }
     }
@@ -92,16 +98,21 @@ fun BeeConnectApp(navController: NavController) {
                     for (document in result) {
                         val nome = document.getString("nome") ?: "Sem nome"
                         val localizacao = document.getString("localizacao") ?: "Sem localização"
+                        val latitude = document.getString("latitude") ?: ""
+                        val longitude = document.getString("longitude") ?: ""
 
                         apiaries.add(
                             Apiary(
                                 name = nome,
                                 location = localizacao,
+                                latitude = latitude,
+                                longitude = longitude,
                                 imageRes = R.drawable.apiario,
                                 id = document.id
                             )
                         )
                     }
+
                 }
                 .addOnFailureListener { e ->
                     Toast.makeText(
@@ -121,7 +132,7 @@ fun BeeConnectApp(navController: NavController) {
 
     Scaffold(
         topBar = { BeeConnectTopBar() },
-        bottomBar = { BeeConnectBottomNavigation() },
+        bottomBar = { BeeConnectBottomNavigation(navController = navController) },
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -267,13 +278,13 @@ fun RoundedBlackButton(text: String, onClick: () -> Unit) {
 }
 
 @Composable
-fun BeeConnectBottomNavigation() {
+fun BeeConnectBottomNavigation(navController: NavController) {
     BottomNavigation(
         backgroundColor = Color(0xFFFFC107)
     ) {
         BottomNavigationItem(
             selected = true,
-            onClick = { /* Navegar para apiários */ },
+            onClick = { navController.navigate("home") },
             icon = {
                 Icon(
                     imageVector = Icons.Default.BugReport,
@@ -285,7 +296,7 @@ fun BeeConnectBottomNavigation() {
         )
         BottomNavigationItem(
             selected = false,
-            onClick = { /* Navegar para estatísticas */ },
+            onClick = { /* Navegar para Estatísticas */ },
             icon = {
                 Icon(
                     imageVector = Icons.Default.BarChart,
@@ -297,7 +308,7 @@ fun BeeConnectBottomNavigation() {
         )
         BottomNavigationItem(
             selected = false,
-            onClick = { /* Navegar para mapa */ },
+            onClick = { navController.navigate("my_apiaries_map") },
             icon = {
                 Icon(
                     imageVector = Icons.Default.Map,
@@ -322,12 +333,7 @@ fun BeeConnectBottomNavigation() {
     }
 }
 
-data class Apiary(
-    val name: String,
-    val location: String,
-    val imageRes: Int? = null,
-    val id: String = "" // útil para futuras ações (editar, apagar)
-)
+
 
 @Preview(showBackground = true)
 @Composable

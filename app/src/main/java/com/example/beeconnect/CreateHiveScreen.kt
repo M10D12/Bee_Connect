@@ -1,5 +1,6 @@
 package com.example.beeconnect
 
+import android.app.DatePickerDialog
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,20 +24,37 @@ import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import java.util.*
 
 @Composable
 fun CreateHiveScreen(navController: NavController, apiaryId: String) {
     val context = LocalContext.current
 
-    var hiveName by remember { mutableStateOf("Example hive name") }
+    var hiveName by remember { mutableStateOf("") }
+    var creationDate by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
     var selectedType by remember { mutableStateOf("Select an item") }
 
     val typeOptions = listOf("Langstroth", "Lusitano", "Reversível", "Industrial (dadant)")
 
+    val calendar = Calendar.getInstance()
+    val year = calendar.get(Calendar.YEAR)
+    val month = calendar.get(Calendar.MONTH)
+    val day = calendar.get(Calendar.DAY_OF_MONTH)
+
+    val datePickerDialog = remember {
+        DatePickerDialog(
+            context,
+            { _, selectedYear, selectedMonth, selectedDay ->
+                creationDate = "%02d/%02d/%04d".format(selectedDay, selectedMonth + 1, selectedYear)
+            },
+            year, month, day
+        )
+    }
+
     Scaffold(
         topBar = { BeeConnectTopBar() },
-        bottomBar = { BeeConnectBottomNavigation() }
-
+        bottomBar = { BeeConnectBottomNavigation(navController) }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -46,30 +64,39 @@ fun CreateHiveScreen(navController: NavController, apiaryId: String) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text("Criação da Colmeia", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Text("Welcome, UserX!", fontSize = 14.sp)
 
-            // Nome da Colmeia
-            Text("Nome da Colmeia:")
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+            // Nome da colmeia (editável)
+            OutlinedTextField(
+                value = hiveName,
+                onValueChange = { hiveName = it },
+                label = { Text("Nome da Colmeia") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            // Tipo (dropdown)
+            DropdownSelector("Tipo da colmeia", typeOptions, selectedType) { selectedType = it }
+
+            // Data de criação (Date Picker)
+            Text("Data de Criação")
+            Box(
                 modifier = Modifier
                     .background(Color(0xFFFFC107), RoundedCornerShape(12.dp))
                     .fillMaxWidth()
+                    .clickable { datePickerDialog.show() }
                     .padding(12.dp)
             ) {
-                Text(hiveName, modifier = Modifier.weight(1f))
-                IconButton(onClick = {
-                    // Aqui poderias abrir um dialog para editar, por simplicidade fizemos diretamente
-                    hiveName = "Nova colmeia"
-                }) {
-                    Icon(Icons.Default.Edit, contentDescription = "Edit hive name")
-                }
+                Text(text = if (creationDate.isEmpty()) "Selecionar data" else creationDate)
             }
 
-            // Dropdown para tipo de colmeia
-            DropdownSelector("Selecione o tipo de colmeia:", typeOptions, selectedType) { selectedType = it }
+            // Descrição
+            OutlinedTextField(
+                value = description,
+                onValueChange = { description = it },
+                label = { Text("Descrição") },
+                modifier = Modifier.fillMaxWidth()
+            )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Button(
                 onClick = {
@@ -79,13 +106,14 @@ fun CreateHiveScreen(navController: NavController, apiaryId: String) {
                         "nome" to hiveName,
                         "tipo" to selectedType,
                         "apiario" to apiaryId,
+                        "data_criacao" to creationDate,
+                        "descricao" to description,
                         "owner_id" to auth.currentUser?.uid
                     )
 
                     firestore.collection("colmeia")
                         .add(hiveData)
                         .addOnSuccessListener { docRef ->
-                            // Atualiza o apiário para incluir a colmeia criada
                             firestore.collection("apiarios").document(apiaryId)
                                 .update("colmeias", FieldValue.arrayUnion(docRef.id))
                                 .addOnSuccessListener {

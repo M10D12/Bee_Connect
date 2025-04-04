@@ -1,13 +1,12 @@
 package com.example.beeconnect
 
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
-
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,12 +22,22 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.*
 
 @Composable
 fun ApiaryScreen(navController: NavController, apiaryId: String) {
     val context = LocalContext.current
     val colmeias = remember { mutableStateListOf<Colmeia>() }
     var apiaryName by remember { mutableStateOf("...") }
+
+    var temperature by remember { mutableStateOf("--") }
+    var weatherInfo by remember { mutableStateOf("A obter...") }
 
     LaunchedEffect(apiaryId) {
         val db = Firebase.firestore
@@ -37,9 +46,18 @@ fun ApiaryScreen(navController: NavController, apiaryId: String) {
             .get()
             .addOnSuccessListener { document ->
                 apiaryName = document.getString("nome") ?: "Sem nome"
+                val latitude = document.getString("latitude")?.toDoubleOrNull()
+                val longitude = document.getString("longitude")?.toDoubleOrNull()
+
+                if (latitude != null && longitude != null) {
+                    fetchWeather(latitude, longitude) { temp, wind, hum ->
+                        temperature = "$temp°"
+                        weatherInfo = "Vento ${wind}km/h  Hum ${hum}%"
+                    }
+                }
             }
-            .addOnFailureListener { e ->
-                Toast.makeText(context, "Erro: ${e.message}", Toast.LENGTH_LONG).show()
+            .addOnFailureListener {
+                Toast.makeText(context, "Erro ao buscar apiário", Toast.LENGTH_SHORT).show()
             }
 
         db.collection("colmeia")
@@ -53,14 +71,14 @@ fun ApiaryScreen(navController: NavController, apiaryId: String) {
                     colmeias.add(Colmeia(nome, imageRes))
                 }
             }
-            .addOnFailureListener { e ->
-                Toast.makeText(context, "Erro: ${e.message}", Toast.LENGTH_LONG).show()
+            .addOnFailureListener {
+                Toast.makeText(context, "Erro ao buscar colmeias", Toast.LENGTH_SHORT).show()
             }
     }
 
     Scaffold(
         topBar = { BeeConnectTopBar() },
-        bottomBar = { BeeConnectBottomNavigation() },
+        bottomBar = { BeeConnectBottomNavigation(navController) },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -91,9 +109,10 @@ fun ApiaryScreen(navController: NavController, apiaryId: String) {
                     modifier = Modifier.padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Today, 12 September", fontSize = 14.sp)
-                    Text("29°", fontSize = 32.sp)
-                    Text("Wind 10km/h  Hum 54%", fontSize = 14.sp)
+                    val dateStr = SimpleDateFormat("dd MMMM", Locale("pt", "PT")).format(Date())
+                    Text("Hoje, $dateStr", fontSize = 14.sp)
+                    Text(temperature, fontSize = 32.sp)
+                    Text(weatherInfo, fontSize = 14.sp)
                 }
             }
 
@@ -107,6 +126,40 @@ fun ApiaryScreen(navController: NavController, apiaryId: String) {
             }
         }
     }
+}
+
+fun fetchWeather(lat: Double, lon: Double, callback: (Int, Int, Int) -> Unit) {
+    val apiKey = "f907eff41b9ba822e28fcdf74b6c537c"
+    val url = "https://api.openweathermap.org/data/2.5/weather?lat=$lat&lon=$lon&units=metric&appid=$apiKey&lang=pt"
+
+    val client = OkHttpClient()
+    val request = Request.Builder().url(url).build()
+
+    Thread {
+        try {
+            val response = client.newCall(request).execute()
+            val responseBody = response.body?.string()
+
+            Log.d("API_WEATHER", "Resposta completa: $responseBody")
+
+            val json = JSONObject(responseBody ?: "")
+
+            if (json.has("main") && json.has("wind")) {
+                val main = json.getJSONObject("main")
+                val windObj = json.getJSONObject("wind")
+
+                val temp = main.getDouble("temp").toInt()
+                val hum = main.getInt("humidity")
+                val wind = windObj.getDouble("speed").toInt()
+
+                callback(temp, wind, hum)
+            } else {
+                Log.e("API_WEATHER", "Erro: Campo 'main' ou 'wind' não existe na resposta")
+            }
+        } catch (e: Exception) {
+            Log.e("API_WEATHER", "Erro ao processar resposta da API: ${e.message}")
+        }
+    }.start()
 }
 
 @Composable

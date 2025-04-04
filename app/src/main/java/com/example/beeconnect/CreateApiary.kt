@@ -46,7 +46,7 @@ fun CreateApiaryScreen(navController: NavController) {
 
     Scaffold(
         topBar = { BeeConnectTopBar() },
-        bottomBar = { BeeConnectBottomNavigation() }
+        bottomBar = { BeeConnectBottomNavigation(navController) }
     ) { paddingValues ->
         if (isMapExpanded) {
             Box(modifier = Modifier.fillMaxSize()) {
