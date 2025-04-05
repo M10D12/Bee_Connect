@@ -8,7 +8,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.runtime.*
@@ -36,7 +35,7 @@ fun ProfileScreen(
     email: String,
     profilePicUrl: String?,
     showLogout: Boolean = true,
-    onSaveUpdatedInfo: (String, String) -> Unit
+    onSaveUpdatedInfo: (String, String, String) -> Unit
 ) {
     val context = LocalContext.current
     var showDialog by remember { mutableStateOf(false) }
@@ -45,28 +44,29 @@ fun ProfileScreen(
         EditProfileDialog(
             initialName = displayName,
             initialEmail = email,
+            initialPhoto = profilePicUrl ?: "",
             onDismiss = { showDialog = false },
-            onSave = { newName, newEmail ->
+            onSave = { newName, newEmail, newPhotoUrl ->
                 val uid = Firebase.auth.currentUser?.uid
                 val db = Firebase.firestore
 
                 if (uid != null) {
-                    db.collection("utilizadores").document(uid)
+                    db.collection("users").document(uid)
                         .update(
                             mapOf(
                                 "username" to newName,
-                                "email" to newEmail
+                                "email" to newEmail,
+                                "profilePic" to newPhotoUrl
                             )
                         )
                         .addOnSuccessListener {
                             Toast.makeText(context, "Perfil atualizado!", Toast.LENGTH_SHORT).show()
-                            onSaveUpdatedInfo(newName, newEmail) // 🔁 atualiza local
+                            onSaveUpdatedInfo(newName, newEmail, newPhotoUrl)
                         }
                         .addOnFailureListener {
                             Toast.makeText(context, "Erro ao atualizar", Toast.LENGTH_SHORT).show()
                         }
                 }
-
                 showDialog = false
             }
         )
@@ -190,9 +190,10 @@ fun RealProfileScreen(navController: NavController) {
         displayName = username,
         email = email,
         profilePicUrl = profilePicUrl,
-        onSaveUpdatedInfo = { updatedName, updatedEmail ->
+        onSaveUpdatedInfo = { updatedName, updatedEmail, updatedPhotoUrl ->
             username = updatedName
             email = updatedEmail
+            profilePicUrl = updatedPhotoUrl
         }
     )
 }
@@ -201,11 +202,13 @@ fun RealProfileScreen(navController: NavController) {
 fun EditProfileDialog(
     initialName: String,
     initialEmail: String,
+    initialPhoto: String,
     onDismiss: () -> Unit,
-    onSave: (String, String) -> Unit
+    onSave: (String, String, String) -> Unit
 ) {
     var newName by remember { mutableStateOf(initialName) }
     var newEmail by remember { mutableStateOf(initialEmail) }
+    var newPhotoUrl by remember { mutableStateOf(initialPhoto) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -225,10 +228,17 @@ fun EditProfileDialog(
                     label = { Text("Email") },
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = newPhotoUrl,
+                    onValueChange = { newPhotoUrl = it },
+                    label = { Text("URL da Foto de Perfil") },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         },
         confirmButton = {
-            Button(onClick = { onSave(newName, newEmail) }) {
+            Button(onClick = { onSave(newName, newEmail, newPhotoUrl) }) {
                 Text("Salvar")
             }
         },
@@ -250,6 +260,6 @@ fun PreviewProfileScreen() {
         email = "maria@colmeia.com",
         profilePicUrl = "",
         showLogout = false,
-        onSaveUpdatedInfo = { _, _ -> }
+        onSaveUpdatedInfo = { _, _, _ -> }
     )
 }
