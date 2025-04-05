@@ -247,6 +247,9 @@ fun ApiaryCard(apiary: Apiary, navController: NavController) {
     val context = LocalContext.current
     val db = Firebase.firestore
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var isDeleted by remember { mutableStateOf(false) }
+
+    if (isDeleted) return // Skip rendering if deleted
 
     if (showDeleteDialog) {
         AlertDialog(
@@ -264,6 +267,7 @@ fun ApiaryCard(apiary: Apiary, navController: NavController) {
                                     "Apiário excluído com sucesso",
                                     Toast.LENGTH_SHORT
                                 ).show()
+                                isDeleted = true
                             }
                             .addOnFailureListener { e ->
                                 Toast.makeText(

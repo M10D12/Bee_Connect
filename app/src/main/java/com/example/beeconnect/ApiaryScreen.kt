@@ -279,6 +279,9 @@ fun ColmeiaCard(colmeia: Colmeia, navController: NavController, apiaryId: String
     val context = LocalContext.current
     val db = Firebase.firestore
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var isDeleted by remember { mutableStateOf(false) }
+
+    if (isDeleted) return
 
     if (showDeleteDialog) {
         AlertDialog(
@@ -296,6 +299,7 @@ fun ColmeiaCard(colmeia: Colmeia, navController: NavController, apiaryId: String
                                     "Colmeia excluída com sucesso",
                                     Toast.LENGTH_SHORT
                                 ).show()
+                                isDeleted = true // Mark as deleted
                             }
                             .addOnFailureListener { e ->
                                 Toast.makeText(
@@ -319,6 +323,7 @@ fun ColmeiaCard(colmeia: Colmeia, navController: NavController, apiaryId: String
             }
         )
     }
+
 
     Card(
         shape = RoundedCornerShape(12.dp),
