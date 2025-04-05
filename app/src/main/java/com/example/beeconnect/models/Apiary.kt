@@ -6,5 +6,6 @@ data class Apiary(
     val latitude: String,
     val longitude: String,
     val imageRes: Int? = null,
+    val imageBase64: String? = null,
     val id: String = ""
 )

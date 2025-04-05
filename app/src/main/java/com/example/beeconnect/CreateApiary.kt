@@ -14,14 +14,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import coil.compose.rememberImagePainter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
+import android.graphics.Bitmap
+import android.graphics.ImageDecoder
+import android.os.Build
+import android.provider.MediaStore
+import android.util.Base64
+import android.net.Uri
+
+import java.io.ByteArrayOutputStream
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -31,7 +38,10 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import java.util.Locale
-
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 
 
 @Composable
@@ -42,6 +52,13 @@ fun CreateApiaryScreen(navController: NavController) {
     var latitude by remember { mutableStateOf("36.21367483") }
     var longitude by remember { mutableStateOf("-56.9846634") }
     var isMapExpanded by remember { mutableStateOf(false) }
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        selectedImageUri = uri
+    }
+
 
     val scrollState = rememberScrollState()
     val context = LocalContext.current
@@ -80,6 +97,16 @@ fun CreateApiaryScreen(navController: NavController) {
                     .padding(paddingValues)
                     .padding(16.dp)
             ) {
+                IconButton(
+                    onClick = { navController.popBackStack() },
+                    modifier = Modifier.align(Alignment.Start)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Voltar",
+                        tint = Color.Black
+                    )
+                }
                 Text("Criação do Apiário", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -112,6 +139,28 @@ fun CreateApiaryScreen(navController: NavController) {
                         )
                     }
                 }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text("Imagem do Apiário")
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFE0E0E0))
+                        .clickable { imagePickerLauncher.launch("image/*") },
+                    contentAlignment = Alignment.Center
+                ) {
+                    selectedImageUri?.let { uri ->
+                        androidx.compose.foundation.Image(
+                            painter = rememberImagePainter(uri),
+                            contentDescription = "Imagem selecionada",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        )
+                    } ?: Text("Clique para selecionar uma imagem", color = Color.DarkGray)
+                }
+
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -219,13 +268,17 @@ fun CreateApiaryScreen(navController: NavController) {
                         }
 
                         val firestore = Firebase.firestore
+                        val imageBase64 = selectedImageUri?.let { uri ->
+                            encodeImageToBase64(uri, context)
+                        }
                         val apiaryData = hashMapOf(
                             "nome" to apiaryName,
                             "localizacao" to address.text,
                             "meio" to selectedEnv,
                             "latitude" to latitude,
                             "longitude" to longitude,
-                            "owner_id" to auth.currentUser?.uid
+                            "owner_id" to auth.currentUser?.uid,
+                            "imageBase64" to imageBase64
                         )
 
                         firestore.collection("apiarios")
@@ -246,6 +299,24 @@ fun CreateApiaryScreen(navController: NavController) {
                 }
             }
         }
+    }
+}
+
+fun encodeImageToBase64(uri: Uri, context: android.content.Context): String? {
+    return try {
+        val bitmap: Bitmap = if (Build.VERSION.SDK_INT < 28) {
+            MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+        } else {
+            val source = ImageDecoder.createSource(context.contentResolver, uri)
+            ImageDecoder.decodeBitmap(source)
+        }
+
+        val stream = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 50, stream)
+        val byteArray = stream.toByteArray()
+        Base64.encodeToString(byteArray, Base64.DEFAULT)
+    } catch (e: Exception) {
+        null
     }
 }
 

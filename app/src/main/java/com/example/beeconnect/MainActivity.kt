@@ -2,41 +2,40 @@ package com.example.beeconnect
 
 
 import android.os.Bundle
+import android.util.Base64
+import android.graphics.BitmapFactory
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
-import androidx.compose.material.icons.filled.BugReport
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.foundation.Image
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
-import androidx.navigation.compose.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import androidx.navigation.compose.*
+import com.example.beeconnect.models.Apiary
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import org.osmdroid.config.Configuration
-import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.Scaffold
-import com.example.beeconnect.models.Apiary
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -82,9 +81,6 @@ class MainActivity : ComponentActivity() {
                 composable("profile"){
                     RealProfileScreen(navController = navController)
                 }
-
-
-
             }
         }
     }
@@ -110,6 +106,7 @@ fun BeeConnectApp(navController: NavController) {
                         val localizacao = document.getString("localizacao") ?: "Sem localização"
                         val latitude = document.getString("latitude") ?: ""
                         val longitude = document.getString("longitude") ?: ""
+                        val imageBase64 = document.getString("imageBase64")
 
                         apiaries.add(
                             Apiary(
@@ -117,7 +114,7 @@ fun BeeConnectApp(navController: NavController) {
                                 location = localizacao,
                                 latitude = latitude,
                                 longitude = longitude,
-                                imageRes = R.drawable.apiario,
+                                imageBase64 = imageBase64,
                                 id = document.id
                             )
                         )
@@ -194,7 +191,7 @@ fun AddApiaryTopButton(navController: NavController) {
 }
 
 @Composable
-fun ApiaryList(apiaries: List<Apiary>,navcontroller: NavController) {
+fun ApiaryList(apiaries: List<Apiary>, navcontroller: NavController) {
     if (apiaries.isEmpty()) {
         Box(
             modifier = Modifier
@@ -221,7 +218,6 @@ fun ApiaryList(apiaries: List<Apiary>,navcontroller: NavController) {
     }
 }
 
-
 @Composable
 fun ApiaryCard(apiary: Apiary, navController: NavController) {
     Card(
@@ -232,9 +228,11 @@ fun ApiaryCard(apiary: Apiary, navController: NavController) {
             .padding(horizontal = 8.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            if (apiary.imageRes != null) {
+            if (!apiary.imageBase64.isNullOrBlank()) {
+                val imageBytes = Base64.decode(apiary.imageBase64, Base64.DEFAULT)
+                val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
                 Image(
-                    painter = painterResource(id = apiary.imageRes),
+                    bitmap = bitmap.asImageBitmap(),
                     contentDescription = "Imagem do apiário",
                     modifier = Modifier
                         .fillMaxWidth()
@@ -342,8 +340,6 @@ fun BeeConnectBottomNavigation(navController: NavController) {
         )
     }
 }
-
-
 
 @Preview(showBackground = true)
 @Composable
