@@ -32,6 +32,8 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import java.util.Locale
 
+
+
 @Composable
 fun CreateApiaryScreen(navController: NavController) {
     var apiaryName by remember { mutableStateOf("") }
@@ -242,7 +244,6 @@ fun CreateApiaryScreen(navController: NavController) {
                 ) {
                     Text("Criar Apiary", color = Color.White)
                 }
-
             }
         }
     }

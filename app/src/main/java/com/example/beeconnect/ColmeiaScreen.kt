@@ -1,5 +1,6 @@
 package com.example.beeconnect
 
+
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.widget.Toast
@@ -7,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,11 +20,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.google.firebase.database.*
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.tasks.await
 import java.util.*
 
+
+data class SensorData(
+    val temperatura: String = "",
+    val localizacao: String = "",
+    val nivelSom: String = "",
+    val sensores: Map<String, String> = emptyMap(),
+    val alertas: List<String> = emptyList()
+)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ColmeiaScreen(navController: NavController, colmeiaId: String) {
@@ -31,6 +43,7 @@ fun ColmeiaScreen(navController: NavController, colmeiaId: String) {
     var nome by remember { mutableStateOf("") }
     var tipo by remember { mutableStateOf("") }
     var descricao by remember { mutableStateOf("") }
+    var alcas by remember { mutableStateOf(0) }
 
     var dataInspecao by remember { mutableStateOf("") }
     var alimentacao by remember { mutableStateOf("") }
@@ -41,6 +54,27 @@ fun ColmeiaScreen(navController: NavController, colmeiaId: String) {
 
     val historico = remember { mutableStateListOf<Map<String, String>>() }
     var showInspecaoForm by remember { mutableStateOf(false) }
+
+    var currentPage by remember { mutableStateOf(0) }
+    val itemsPerPage = 3
+    val pagedHistorico = historico.chunked(itemsPerPage)
+    val currentInspecoes = pagedHistorico.getOrNull(currentPage) ?: emptyList()
+
+    val realtimeDb = remember { FirebaseDatabase.getInstance() }
+    var sensorData by remember { mutableStateOf(SensorData()) }
+
+    LaunchedEffect(Unit) {
+        val ref = realtimeDb.getReference("colmeias/colmeia1")
+        ref.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                sensorData = snapshot.getValue(SensorData::class.java) ?: SensorData()
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Toast.makeText(context, "Erro Realtime DB: ${error.message}", Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
 
     val calendar = Calendar.getInstance()
     val datePickerDialog = DatePickerDialog(
@@ -71,6 +105,7 @@ fun ColmeiaScreen(navController: NavController, colmeiaId: String) {
             nome = doc.getString("nome") ?: ""
             tipo = doc.getString("tipo") ?: ""
             descricao = doc.getString("descricao") ?: ""
+            alcas = doc.getLong("alcas")?.toInt() ?: 0  // <-- esta linha carrega o número de alças
 
             val result = db.collection("colmeia").document(colmeiaId)
                 .collection("inspecoes")
@@ -87,6 +122,7 @@ fun ColmeiaScreen(navController: NavController, colmeiaId: String) {
         }
     }
 
+
     Scaffold(
         topBar = { BeeConnectTopBar(navController) },
         bottomBar = { BeeConnectBottomNavigation(navController) }
@@ -99,10 +135,25 @@ fun ColmeiaScreen(navController: NavController, colmeiaId: String) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { navController.popBackStack() }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Voltar",
+                            tint = Color.Black
+                        )
+                    }
+                }
+            }
+            item {
                 Text("Gestão da Colmeia", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 OutlinedTextField(value = nome, onValueChange = { nome = it }, label = { Text("Nome") }, modifier = Modifier.fillMaxWidth())
 
-                Text("Tipo da Colmeia")
 
                 ExposedDropdownMenuBox(
                     expanded = expanded,
@@ -137,13 +188,41 @@ fun ColmeiaScreen(navController: NavController, colmeiaId: String) {
 
                 OutlinedTextField(value = descricao, onValueChange = { descricao = it }, label = { Text("Descrição") }, modifier = Modifier.fillMaxWidth())
 
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Número de Alças:", fontWeight = FontWeight.Medium)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Button(
+                            onClick = { if (alcas > 0) alcas-- },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Gray),
+                            contentPadding = PaddingValues(horizontal = 12.dp)
+                        ) {
+                            Text("-")
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text(alcas.toString(), fontSize = 18.sp)
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Button(
+                            onClick = { alcas++ },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Gray),
+                            contentPadding = PaddingValues(horizontal = 12.dp)
+                        ) {
+                            Text("+")
+                        }
+                    }
+                }
+
                 Button(
                     onClick = {
                         db.collection("colmeia").document(colmeiaId).update(
                             mapOf(
                                 "nome" to nome,
                                 "tipo" to tipo,
-                                "descricao" to descricao
+                                "descricao" to descricao,
+                                "alcas" to alcas
                             )
                         ).addOnSuccessListener {
                             Toast.makeText(context, "Informações atualizadas!", Toast.LENGTH_SHORT).show()
@@ -156,6 +235,32 @@ fun ColmeiaScreen(navController: NavController, colmeiaId: String) {
                 }
 
                 Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+                // ✅ Mostra os dados em tempo real dos sensores
+                Text("📡 Dados em Tempo Real da Colmeia", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+
+                Text("📍 Localização: ${sensorData.localizacao}")
+                Text("🌡️ Temperatura: ${sensorData.temperatura}")
+                Text("🔊 Nível de Som: ${sensorData.nivelSom}")
+                Text("💡 Luminosidade: ${sensorData.sensores["Luminosidade"] ?: "—"}")
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text("🛑 Alertas:")
+                if (sensorData.alertas.isEmpty()) {
+                    Text("Nenhum alerta no momento.", fontSize = 14.sp)
+                } else {
+                    sensorData.alertas.forEach {
+                        Text("• $it", fontSize = 14.sp, color = when {
+                            it.contains("🚨") || it.contains("🐝") -> Color.Red
+                            it.contains("⚠️") -> Color(0xFFFFA000)
+                            else -> Color.Black
+                        })
+                    }
+                }
+
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
+
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -193,6 +298,7 @@ fun ColmeiaScreen(navController: NavController, colmeiaId: String) {
                             .clickable { visitaDateTimePicker() },
                         enabled = false
                     )
+
 
                     Button(
                         onClick = {
@@ -246,8 +352,8 @@ fun ColmeiaScreen(navController: NavController, colmeiaId: String) {
                 }
             }
 
-            items(historico.size) { i ->
-                val inspecao = historico[i]
+            items(currentInspecoes.size) { i ->
+                val inspecao = currentInspecoes[i]
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5)),
@@ -261,6 +367,36 @@ fun ColmeiaScreen(navController: NavController, colmeiaId: String) {
                         Text("📝 Observações: ${inspecao["observacoes"]}")
                         inspecao["proxima_visita"]?.let {
                             Text("📌 Próxima visita: $it", fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+            item {
+                if (pagedHistorico.size > 1) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = { if (currentPage > 0) currentPage-- },
+                            enabled = currentPage > 0
+                        ) {
+                            Text("← Anterior")
+                        }
+
+                        Text(
+                            text = "Página ${currentPage + 1} de ${pagedHistorico.size}",
+                            fontWeight = FontWeight.Medium
+                        )
+
+                        TextButton(
+                            onClick = { if (currentPage < pagedHistorico.size - 1) currentPage++ },
+                            enabled = currentPage < pagedHistorico.size - 1
+                        ) {
+                            Text("Seguinte →")
                         }
                     }
                 }

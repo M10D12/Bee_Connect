@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -63,6 +64,16 @@ fun CreateHiveScreen(navController: NavController, apiaryId: String) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            IconButton(
+                onClick = { navController.popBackStack() },
+                modifier = Modifier.align(Alignment.Start)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Voltar",
+                    tint = Color.Black
+                )
+            }
             Text("Criação da Colmeia", fontSize = 20.sp, fontWeight = FontWeight.Bold)
 
             // Nome da colmeia (editável)

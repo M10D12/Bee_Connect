@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,10 +91,26 @@ fun ApiaryScreen(navController: NavController, apiaryId: String) {
                 .padding(16.dp)
         ) {
             Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                IconButton(onClick = { navController.popBackStack() }) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Voltar",
+                        tint = Color.Black
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
-            ) {
+            )
+
+            {
                 Text("Apiário $apiaryName", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 RoundedBlackButton(text = "+ Colmeia") {
                     navController.navigate("createHive/${apiaryId}")

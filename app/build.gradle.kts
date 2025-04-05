@@ -68,6 +68,9 @@ dependencies {
     implementation("com.google.firebase:firebase-analytics-ktx")
     implementation("com.google.firebase:firebase-messaging-ktx")
     implementation ("com.google.firebase:firebase-messaging:23.3.1")
+    implementation("com.google.firebase:firebase-storage")
+    implementation("com.google.firebase:firebase-database-ktx")
+
 
 
 // Navigation
@@ -86,7 +89,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.6.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.json:json:20231013")
-
+    implementation("io.coil-kt:coil-compose:2.4.0")
 
 
 

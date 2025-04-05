@@ -7,18 +7,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExitToApp
-import androidx.compose.runtime.Composable
-import com.google.firebase.firestore.ktx.firestore
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -30,7 +24,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
+import coil.compose.AsyncImage
 import com.google.firebase.auth.ktx.auth
+import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 
 @Composable
@@ -38,9 +34,43 @@ fun ProfileScreen(
     navController: NavController,
     displayName: String,
     email: String,
-    showLogout: Boolean = true
+    profilePicUrl: String?,
+    showLogout: Boolean = true,
+    onSaveUpdatedInfo: (String, String) -> Unit
 ) {
     val context = LocalContext.current
+    var showDialog by remember { mutableStateOf(false) }
+
+    if (showDialog) {
+        EditProfileDialog(
+            initialName = displayName,
+            initialEmail = email,
+            onDismiss = { showDialog = false },
+            onSave = { newName, newEmail ->
+                val uid = Firebase.auth.currentUser?.uid
+                val db = Firebase.firestore
+
+                if (uid != null) {
+                    db.collection("utilizadores").document(uid)
+                        .update(
+                            mapOf(
+                                "username" to newName,
+                                "email" to newEmail
+                            )
+                        )
+                        .addOnSuccessListener {
+                            Toast.makeText(context, "Perfil atualizado!", Toast.LENGTH_SHORT).show()
+                            onSaveUpdatedInfo(newName, newEmail) // 🔁 atualiza local
+                        }
+                        .addOnFailureListener {
+                            Toast.makeText(context, "Erro ao atualizar", Toast.LENGTH_SHORT).show()
+                        }
+                }
+
+                showDialog = false
+            }
+        )
+    }
 
     Scaffold(
         topBar = { BeeConnectTopBar(navController) },
@@ -53,37 +83,47 @@ fun ProfileScreen(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            IconButton(
+                onClick = { navController.popBackStack() },
+                modifier = Modifier.align(Alignment.Start)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Voltar",
+                    tint = Color.Black
+                )
+            }
             Spacer(modifier = Modifier.height(32.dp))
 
-            Image(
-                painter = painterResource(id = R.drawable.apiario),
-                contentDescription = "Foto de perfil",
-                modifier = Modifier
-                    .size(120.dp)
-                    .clip(CircleShape)
-                    .background(Color.LightGray)
-            )
+            if (profilePicUrl.isNullOrBlank()) {
+                Image(
+                    painter = painterResource(id = R.drawable.bee_keeper),
+                    contentDescription = "Foto padrão",
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(CircleShape)
+                        .background(Color.LightGray)
+                )
+            } else {
+                AsyncImage(
+                    model = profilePicUrl,
+                    contentDescription = "Foto de perfil",
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(CircleShape)
+                        .background(Color.LightGray)
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text(
-                text = displayName,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Text(
-                text = email,
-                fontSize = 16.sp,
-                color = Color.Gray
-            )
+            Text(text = displayName, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(text = email, fontSize = 16.sp, color = Color.Gray)
 
             Spacer(modifier = Modifier.height(32.dp))
 
             Button(
-                onClick = {
-                    Toast.makeText(context, "Funcionalidade em desenvolvimento", Toast.LENGTH_SHORT).show()
-                },
+                onClick = { showDialog = true },
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.medium,
                 colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF03A9F4))
@@ -115,27 +155,28 @@ fun ProfileScreen(
         }
     }
 }
+
 @Composable
 fun RealProfileScreen(navController: NavController) {
     val user = Firebase.auth.currentUser
     val context = LocalContext.current
 
-    // ✅ Tipos declarados explicitamente
     var username by remember { mutableStateOf("Carregando...") }
     var email by remember { mutableStateOf(user?.email ?: "email@exemplo.com") }
+    var profilePicUrl by remember { mutableStateOf("") }
 
     val uid = user?.uid
 
-    // ✅ Correto uso de LaunchedEffect + Firebase Firestore
     LaunchedEffect(uid) {
         if (uid != null) {
             val db = Firebase.firestore
-            db.collection("utilizadores").document(uid)
+            db.collection("users").document(uid)
                 .get()
                 .addOnSuccessListener { doc ->
-                    if (doc != null && doc.exists()) {
+                    if (doc.exists()) {
                         username = doc.getString("username") ?: "Utilizador"
                         email = doc.getString("email") ?: email
+                        profilePicUrl = doc.getString("profilePic") ?: ""
                     }
                 }
                 .addOnFailureListener {
@@ -144,15 +185,60 @@ fun RealProfileScreen(navController: NavController) {
         }
     }
 
-    // ✅ Passa os dados para a UI desacoplada
     ProfileScreen(
         navController = navController,
         displayName = username,
-        email = email
+        email = email,
+        profilePicUrl = profilePicUrl,
+        onSaveUpdatedInfo = { updatedName, updatedEmail ->
+            username = updatedName
+            email = updatedEmail
+        }
     )
 }
 
+@Composable
+fun EditProfileDialog(
+    initialName: String,
+    initialEmail: String,
+    onDismiss: () -> Unit,
+    onSave: (String, String) -> Unit
+) {
+    var newName by remember { mutableStateOf(initialName) }
+    var newEmail by remember { mutableStateOf(initialEmail) }
 
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Editar Perfil") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = newName,
+                    onValueChange = { newName = it },
+                    label = { Text("Nome") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = newEmail,
+                    onValueChange = { newEmail = it },
+                    label = { Text("Email") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onSave(newName, newEmail) }) {
+                Text("Salvar")
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
 
 @Preview(showBackground = true)
 @Composable
@@ -162,6 +248,8 @@ fun PreviewProfileScreen() {
         navController = fakeNavController,
         displayName = "Maria Abelha",
         email = "maria@colmeia.com",
-        showLogout = false
+        profilePicUrl = "",
+        showLogout = false,
+        onSaveUpdatedInfo = { _, _ -> }
     )
 }
