@@ -5,6 +5,8 @@ import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
@@ -24,8 +26,6 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -37,9 +37,9 @@ fun ApiaryScreen(navController: NavController, apiaryId: String) {
     val context = LocalContext.current
     val colmeias = remember { mutableStateListOf<Colmeia>() }
     var apiaryName by remember { mutableStateOf("...") }
-
     var temperature by remember { mutableStateOf("--") }
     var weatherInfo by remember { mutableStateOf("A obter...") }
+    var forecast by remember { mutableStateOf(listOf<String>()) }
 
     LaunchedEffect(apiaryId) {
         val db = Firebase.firestore
@@ -55,6 +55,10 @@ fun ApiaryScreen(navController: NavController, apiaryId: String) {
                     fetchWeather(latitude, longitude) { temp, wind, hum ->
                         temperature = "$temp°"
                         weatherInfo = "Vento ${wind}km/h  Hum ${hum}%"
+                    }
+
+                    fetchForecast(latitude, longitude) {
+                        forecast = it
                     }
                 }
             }
@@ -73,7 +77,6 @@ fun ApiaryScreen(navController: NavController, apiaryId: String) {
                     val id = document.id
                     colmeias.add(Colmeia(nome, imageRes, id))
                 }
-
             }
             .addOnFailureListener {
                 Toast.makeText(context, "Erro ao buscar colmeias", Toast.LENGTH_SHORT).show()
@@ -108,9 +111,7 @@ fun ApiaryScreen(navController: NavController, apiaryId: String) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
-            )
-
-            {
+            ) {
                 Text("Apiário $apiaryName", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 RoundedBlackButton(text = "+ Colmeia") {
                     navController.navigate("createHive/${apiaryId}")
@@ -133,6 +134,25 @@ fun ApiaryScreen(navController: NavController, apiaryId: String) {
                     Text("Hoje, $dateStr", fontSize = 14.sp)
                     Text(temperature, fontSize = 32.sp)
                     Text(weatherInfo, fontSize = 14.sp)
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Divider(color = Color.LightGray, thickness = 1.dp)
+
+                    Text(
+                        "☀️ Previsão para os próximos dias",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                    )
+
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(forecast.size) { index ->
+                            ForecastCard(forecast[index])
+                        }
+                    }
                 }
             }
 
@@ -160,8 +180,6 @@ fun fetchWeather(lat: Double, lon: Double, callback: (Int, Int, Int) -> Unit) {
             val response = client.newCall(request).execute()
             val responseBody = response.body?.string()
 
-            Log.d("API_WEATHER", "Resposta completa: $responseBody")
-
             val json = JSONObject(responseBody ?: "")
 
             if (json.has("main") && json.has("wind")) {
@@ -173,40 +191,108 @@ fun fetchWeather(lat: Double, lon: Double, callback: (Int, Int, Int) -> Unit) {
                 val wind = windObj.getDouble("speed").toInt()
 
                 callback(temp, wind, hum)
-            } else {
-                Log.e("API_WEATHER", "Erro: Campo 'main' ou 'wind' não existe na resposta")
             }
         } catch (e: Exception) {
-            Log.e("API_WEATHER", "Erro ao processar resposta da API: ${e.message}")
+            Log.e("API_WEATHER", "Erro: ${e.message}")
+        }
+    }.start()
+}
+
+fun fetchForecast(lat: Double, lon: Double, callback: (List<String>) -> Unit) {
+    val apiKey = "f907eff41b9ba822e28fcdf74b6c537c"
+    val url = "https://api.openweathermap.org/data/2.5/forecast?lat=$lat&lon=$lon&units=metric&appid=$apiKey&lang=pt"
+
+    val client = OkHttpClient()
+    val request = Request.Builder().url(url).build()
+
+    Thread {
+        try {
+            val response = client.newCall(request).execute()
+            val responseBody = response.body?.string()
+            val json = JSONObject(responseBody ?: "")
+            val list = json.getJSONArray("list")
+
+            val result = mutableListOf<String>()
+            val formatterIn = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+            val formatterOut = SimpleDateFormat("EEEE, dd/MM", Locale("pt", "PT"))
+            val seenDays = mutableSetOf<String>()
+
+            for (i in 0 until list.length()) {
+                val entry = list.getJSONObject(i)
+                val dtTxt = entry.getString("dt_txt")
+                val date = formatterIn.parse(dtTxt)
+                val dayKey = formatterOut.format(date ?: continue)
+
+                if (dtTxt.contains("12:00:00") && !seenDays.contains(dayKey)) {
+                    val main = entry.getJSONObject("main")
+                    val weatherArray = entry.getJSONArray("weather")
+                    val description = weatherArray.getJSONObject(0).getString("description")
+                    val temp = main.getDouble("temp").toInt()
+
+                    result.add("$dayKey: $temp°C, $description")
+                    seenDays.add(dayKey)
+
+                    if (result.size == 5) break
+                }
+            }
+
+            callback(result)
+        } catch (e: Exception) {
+            Log.e("API_FORECAST", "Erro: ${e.message}")
         }
     }.start()
 }
 
 @Composable
+fun ForecastCard(dayForecast: String) {
+    val parts = dayForecast.split(":")
+    val day = parts.getOrNull(0)?.trim() ?: ""
+    val rest = parts.getOrNull(1)?.trim() ?: ""
+
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        backgroundColor = Color(0xFFE1F5FE),
+        elevation = 2.dp,
+        modifier = Modifier
+            .width(140.dp)
+            .height(100.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(day, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(rest, fontSize = 12.sp, maxLines = 2)
+        }
+    }
+}
+
+@Composable
 fun ColmeiaCard(colmeia: Colmeia, navController: NavController) {
     Card(
-        shape = RoundedCornerShape(16.dp),
-        elevation = 8.dp,
-        backgroundColor = Color(0xFFFFECB3),
+        shape = RoundedCornerShape(12.dp),
+        elevation = 4.dp,
+        backgroundColor = Color(0xFFFFF3E0),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Image(
                 painter = painterResource(id = colmeia.imageRes),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(150.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .height(140.dp)
+                    .clip(RoundedCornerShape(10.dp))
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Text(text = colmeia.nome, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(4.dp))
+            Text(colmeia.nome, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Spacer(modifier = Modifier.height(6.dp))
             Button(
-                onClick = {navController.navigate("colmeiaScreen/${colmeia.id}")  },
+                onClick = { navController.navigate("colmeiaScreen/${colmeia.id}") },
                 colors = ButtonDefaults.buttonColors(backgroundColor = Color.Black),
-                shape = RoundedCornerShape(50),
-                modifier = Modifier.align(Alignment.CenterHorizontally)
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp)
             ) {
                 Text("Ver mais", color = Color.White)
             }
@@ -214,11 +300,7 @@ fun ColmeiaCard(colmeia: Colmeia, navController: NavController) {
     }
 }
 
-data class Colmeia(
-    val nome: String,
-    val imageRes: Int,
-    val id: String
-)
+data class Colmeia(val nome: String, val imageRes: Int, val id: String)
 
 @Preview(showBackground = true)
 @Composable

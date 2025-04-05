@@ -1,6 +1,6 @@
 package com.example.beeconnect
 
-
+import com.google.firebase.firestore.Query
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.widget.Toast
@@ -109,7 +109,7 @@ fun ColmeiaScreen(navController: NavController, colmeiaId: String) {
 
             val result = db.collection("colmeia").document(colmeiaId)
                 .collection("inspecoes")
-                .orderBy("data")
+                .orderBy("data",Query.Direction.DESCENDING)
                 .get()
                 .await()
 
