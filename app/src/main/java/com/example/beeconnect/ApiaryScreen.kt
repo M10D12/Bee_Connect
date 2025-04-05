@@ -11,6 +11,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -160,7 +162,11 @@ fun ApiaryScreen(navController: NavController, apiaryId: String) {
 
             LazyColumn(contentPadding = PaddingValues(bottom = 70.dp)) {
                 items(colmeias.size) { index ->
-                    ColmeiaCard(colmeia = colmeias[index], navController)
+                    ColmeiaCard(
+                        colmeia = colmeias[index],
+                        navController = navController,
+                        apiaryId = apiaryId
+                    )
                     Spacer(modifier = Modifier.height(12.dp))
                 }
             }
@@ -269,7 +275,51 @@ fun ForecastCard(dayForecast: String) {
 }
 
 @Composable
-fun ColmeiaCard(colmeia: Colmeia, navController: NavController) {
+fun ColmeiaCard(colmeia: Colmeia, navController: NavController, apiaryId: String) {
+    val context = LocalContext.current
+    val db = Firebase.firestore
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Confirmar exclusão") },
+            text = { Text("Tem certeza que deseja excluir esta colmeia?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        db.collection("colmeia").document(colmeia.id)
+                            .delete()
+                            .addOnSuccessListener {
+                                Toast.makeText(
+                                    context,
+                                    "Colmeia excluída com sucesso",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                            .addOnFailureListener { e ->
+                                Toast.makeText(
+                                    context,
+                                    "Erro ao excluir colmeia: ${e.message}",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        showDeleteDialog = false
+                    }
+                ) {
+                    Text("Excluir")
+                }
+            },
+            dismissButton = {
+                Button(
+                    onClick = { showDeleteDialog = false }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
     Card(
         shape = RoundedCornerShape(12.dp),
         elevation = 4.dp,
@@ -288,13 +338,42 @@ fun ColmeiaCard(colmeia: Colmeia, navController: NavController) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(colmeia.nome, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Spacer(modifier = Modifier.height(6.dp))
-            Button(
-                onClick = { navController.navigate("colmeiaScreen/${colmeia.id}") },
-                colors = ButtonDefaults.buttonColors(backgroundColor = Color.Black),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Ver mais", color = Color.White)
+                IconButton(
+                    onClick = {
+                        // Navigate to edit screen (you'll need to create this)
+                        navController.navigate("editHive/${colmeia.id}")
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Editar",
+                        tint = Color.Black
+                    )
+                }
+
+                Button(
+                    onClick = { navController.navigate("colmeiaScreen/${colmeia.id}") },
+                    colors = ButtonDefaults.buttonColors(backgroundColor = Color.Black),
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.width(120.dp)
+                ) {
+                    Text("Ver mais", color = Color.White)
+                }
+
+                IconButton(
+                    onClick = { showDeleteDialog = true }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Excluir",
+                        tint = Color.Red
+                    )
+                }
             }
         }
     }

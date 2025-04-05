@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.NavController
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
 import android.os.Build
 import android.provider.MediaStore
@@ -42,10 +43,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.asImageBitmap
 
 @Composable
-fun CreateApiaryScreen(navController: NavController) {
+fun CreateApiaryScreen(navController: NavController, apiaryId: String? = null) {
     var apiaryName by remember { mutableStateOf("") }
     var address by remember { mutableStateOf(TextFieldValue("")) }
     var selectedEnv by remember { mutableStateOf("Suburbano") }
@@ -53,15 +55,40 @@ fun CreateApiaryScreen(navController: NavController) {
     var longitude by remember { mutableStateOf("-56.9846634") }
     var isMapExpanded by remember { mutableStateOf(false) }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var existingImageBase64 by remember { mutableStateOf<String?>(null) }
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         selectedImageUri = uri
+        existingImageBase64 = null
     }
 
 
     val scrollState = rememberScrollState()
     val context = LocalContext.current
+    val db = Firebase.firestore
+
+    LaunchedEffect(apiaryId) {
+        if (apiaryId != null) {
+            db.collection("apiarios").document(apiaryId).get()
+                .addOnSuccessListener { document ->
+                    apiaryName = document.getString("nome") ?: ""
+                    address = TextFieldValue(document.getString("localizacao") ?: "")
+                    selectedEnv = document.getString("meio") ?: "Suburbano"
+                    latitude = document.getString("latitude") ?: "36.21367483"
+                    longitude = document.getString("longitude") ?: "-56.9846634"
+                    existingImageBase64 = document.getString("imageBase64")
+                }
+                .addOnFailureListener { e ->
+                    Toast.makeText(
+                        context,
+                        "Erro ao carregar apiário: ${e.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+        }
+    }
 
     Scaffold(
         topBar = { BeeConnectTopBar(navController) },
@@ -263,14 +290,19 @@ fun CreateApiaryScreen(navController: NavController) {
 
                         if (apiaryName.isBlank() || address.text.isBlank() ||
                             latitude.toDoubleOrNull() == null || longitude.toDoubleOrNull() == null) {
-                            Toast.makeText(context, "Preenche todos os campos corretamente.", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                context,
+                                "Preenche todos os campos corretamente.",
+                                Toast.LENGTH_SHORT
+                            ).show()
                             return@Button
                         }
 
-                        val firestore = Firebase.firestore
+                        // Use existing image if no new image was selected
                         val imageBase64 = selectedImageUri?.let { uri ->
                             encodeImageToBase64(uri, context)
-                        }
+                        } ?: existingImageBase64
+
                         val apiaryData = hashMapOf(
                             "nome" to apiaryName,
                             "localizacao" to address.text,
@@ -281,26 +313,102 @@ fun CreateApiaryScreen(navController: NavController) {
                             "imageBase64" to imageBase64
                         )
 
-                        firestore.collection("apiarios")
-                            .add(apiaryData)
-                            .addOnSuccessListener {
-                                Toast.makeText(context, "Apiário criado com sucesso!", Toast.LENGTH_SHORT).show()
-                                navController.navigate("home")
-                            }
-                            .addOnFailureListener { e ->
-                                Toast.makeText(context, "Erro ao criar apiário: ${e.message}", Toast.LENGTH_LONG).show()
-                            }
+                        if (apiaryId == null) {
+                            // Create new apiary
+                            db.collection("apiarios")
+                                .add(apiaryData)
+                                .addOnSuccessListener {
+                                    Toast.makeText(
+                                        context,
+                                        "Apiário criado com sucesso!",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    navController.navigate("home")
+                                }
+                                .addOnFailureListener { e ->
+                                    Toast.makeText(
+                                        context,
+                                        "Erro ao criar apiário: ${e.message}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                        } else {
+                            // Update existing apiary
+                            db.collection("apiarios")
+                                .document(apiaryId)
+                                .set(apiaryData)
+                                .addOnSuccessListener {
+                                    Toast.makeText(
+                                        context,
+                                        "Apiário atualizado com sucesso!",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    navController.navigate("home")
+                                }
+                                .addOnFailureListener { e ->
+                                    Toast.makeText(
+                                        context,
+                                        "Erro ao atualizar apiário: ${e.message}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(backgroundColor = Color.Black),
                     shape = RoundedCornerShape(50),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Criar Apiary", color = Color.White)
+                    Text(
+                        if (apiaryId == null) "Criar Apiário" else "Atualizar Apiário",
+                        color = Color.White
+                    )
                 }
             }
         }
     }
 }
+
+@Composable
+fun ApiaryImageSection(
+    selectedImageUri: Uri?,
+    existingImageBase64: String?,
+    onImageClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(180.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFFE0E0E0))
+            .clickable { onImageClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        when {
+            selectedImageUri != null -> {
+                androidx.compose.foundation.Image(
+                    painter = rememberImagePainter(selectedImageUri),
+                    contentDescription = "Imagem selecionada",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+            }
+            existingImageBase64 != null -> {
+                val imageBytes = Base64.decode(existingImageBase64, Base64.DEFAULT)
+                val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = "Imagem existente",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+            }
+            else -> {
+                Text("Clique para selecionar uma imagem", color = Color.DarkGray)
+            }
+        }
+    }
+}
+
 
 fun encodeImageToBase64(uri: Uri, context: android.content.Context): String? {
     return try {

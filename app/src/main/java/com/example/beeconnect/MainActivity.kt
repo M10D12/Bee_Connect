@@ -7,8 +7,10 @@ import android.graphics.BitmapFactory
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,6 +38,11 @@ import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import org.osmdroid.config.Configuration
 import androidx.compose.material3.Scaffold
+import androidx.compose.material.AlertDialog
+import androidx.compose.material.IconButton
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -53,9 +60,25 @@ class MainActivity : ComponentActivity() {
                 composable("home") {
                     BeeConnectApp(navController)
                 }
-                composable("createApiary") {
-                    CreateApiaryScreen(navController)
+                composable(
+                    route = "createApiary?apiaryId={apiaryId}",
+                    arguments = listOf(
+                        navArgument("apiaryId") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) { backStackEntry ->
+                    val apiaryId = backStackEntry.arguments?.getString("apiaryId")
+                    CreateApiaryScreen(navController, apiaryId)
                 }
+
+                composable("editHive/{colmeiaId}") { backStackEntry ->
+                    val colmeiaId = backStackEntry.arguments?.getString("colmeiaId") ?: ""
+                    EditHiveScreen(navController, colmeiaId)
+                }
+
                 composable("login") {
                     LoginScreen(navController)
                 }
@@ -140,17 +163,18 @@ fun BeeConnectApp(navController: NavController) {
     Scaffold(
         topBar = { BeeConnectTopBar(navController) },
         bottomBar = { BeeConnectBottomNavigation(navController = navController) },
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            AddApiaryTopButton(navController)
-            Spacer(modifier = Modifier.height(8.dp))
-            ApiaryList(apiaries,navController)
+        content = { paddingValues ->  // Add this content parameter
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                AddApiaryTopButton(navController)
+                Spacer(modifier = Modifier.height(8.dp))
+                ApiaryList(apiaries, navController)
+            }
         }
-    }
+    )
 }
 
 @Composable
@@ -220,6 +244,50 @@ fun ApiaryList(apiaries: List<Apiary>, navcontroller: NavController) {
 
 @Composable
 fun ApiaryCard(apiary: Apiary, navController: NavController) {
+    val context = LocalContext.current
+    val db = Firebase.firestore
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Confirmar exclusão") },
+            text = { Text("Tem certeza que deseja excluir este apiário?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        db.collection("apiarios").document(apiary.id)
+                            .delete()
+                            .addOnSuccessListener {
+                                Toast.makeText(
+                                    context,
+                                    "Apiário excluído com sucesso",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                            .addOnFailureListener { e ->
+                                Toast.makeText(
+                                    context,
+                                    "Erro ao excluir apiário: ${e.message}",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        showDeleteDialog = false
+                    }
+                ) {
+                    Text("Excluir")
+                }
+            },
+            dismissButton = {
+                Button(
+                    onClick = { showDeleteDialog = false }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
     Card(
         shape = RoundedCornerShape(16.dp),
         elevation = 8.dp,
@@ -258,12 +326,24 @@ fun ApiaryCard(apiary: Apiary, navController: NavController) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Box(
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                IconButton(
+                    onClick = { navController.navigate("createApiary?apiaryId=${apiary.id}") }
+                ) {
+                    Icon(Icons.Default.Edit, contentDescription = "Editar")
+                }
+
                 RoundedBlackButton(text = "Ver mais") {
                     navController.navigate("apiaryScreen/${apiary.id}")
+                }
+
+                IconButton(
+                    onClick = { showDeleteDialog = true }
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = "Excluir", tint = Color.Red)
                 }
             }
         }
@@ -339,6 +419,216 @@ fun BeeConnectBottomNavigation(navController: NavController) {
             alwaysShowLabel = false
         )
     }
+}
+
+@Composable
+fun EditHiveScreen(navController: NavController, colmeiaId: String) {
+    var hiveName by remember { mutableStateOf("") }
+    var hiveType by remember { mutableStateOf("Langstroth") }
+    var hiveStatus by remember { mutableStateOf("Ativa") }
+    var installationDate by remember { mutableStateOf("") }
+    var notes by remember { mutableStateOf("") }
+
+    val context = LocalContext.current
+    val db = Firebase.firestore
+
+    // Load existing hive data
+    LaunchedEffect(colmeiaId) {
+        db.collection("colmeia").document(colmeiaId).get()
+            .addOnSuccessListener { document ->
+                hiveName = document.getString("nome") ?: ""
+                hiveType = document.getString("tipo") ?: "Langstroth"
+                hiveStatus = document.getString("estado") ?: "Ativa"
+                installationDate = document.getString("data_instalacao") ?: ""
+                notes = document.getString("notas") ?: ""
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(
+                    context,
+                    "Erro ao carregar colmeia: ${e.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Editar Colmeia") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Voltar"
+                        )
+                    }
+                },
+                backgroundColor = Color(0xFFFFC107),
+                contentColor = Color.Black
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp)
+        ) {
+            OutlinedTextField(
+                value = hiveName,
+                onValueChange = { hiveName = it },
+                label = { Text("Nome da Colmeia") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text("Tipo de Colmeia", fontWeight = FontWeight.Bold)
+            Row(
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                val types = listOf("Langstroth", "Top Bar", "Warre", "Outro")
+                types.forEach { type ->
+                    FilterChip(
+                        selected = hiveType == type,
+                        onClick = { hiveType = type },
+                        modifier = Modifier.padding(4.dp)
+                    ) {
+                        Text(type)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text("Estado da Colmeia", fontWeight = FontWeight.Bold)
+            Row(
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                val statuses = listOf("Ativa", "Inativa", "Em observação")
+                statuses.forEach { status ->
+                    FilterChip(
+                        selected = hiveStatus == status,
+                        onClick = { hiveStatus = status },
+                        modifier = Modifier.padding(4.dp)
+                    ) {
+                        Text(status)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = installationDate,
+                onValueChange = { installationDate = it },
+                label = { Text("Data de Instalação (DD/MM/AAAA)") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = notes,
+                onValueChange = { notes = it },
+                label = { Text("Notas") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp),
+                shape = RoundedCornerShape(8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = {
+                    if (hiveName.isBlank()) {
+                        Toast.makeText(
+                            context,
+                            "Por favor, insira um nome para a colmeia",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        return@Button
+                    }
+
+                    val hiveData = hashMapOf(
+                        "nome" to hiveName,
+                        "tipo" to hiveType,
+                        "estado" to hiveStatus,
+                        "data_instalacao" to installationDate,
+                        "notas" to notes
+                    )
+
+                    db.collection("colmeia").document(colmeiaId)
+                        .update(hiveData as Map<String, Any>)
+                        .addOnSuccessListener {
+                            Toast.makeText(
+                                context,
+                                "Colmeia atualizada com sucesso!",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            navController.popBackStack()
+                        }
+                        .addOnFailureListener { e ->
+                            Toast.makeText(
+                                context,
+                                "Erro ao atualizar colmeia: ${e.message}",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                },
+                colors = ButtonDefaults.buttonColors(backgroundColor = Color.Black),
+                shape = RoundedCornerShape(50),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Atualizar Colmeia", color = Color.White)
+            }
+        }
+    }
+}
+
+@Composable
+fun FilterChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Surface(
+        color = when {
+            selected -> Color(0xFFE0F7FA)
+            else -> Color.LightGray
+        },
+        contentColor = Color.Black,
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = when {
+                selected -> Color(0xFF00838F)
+                else -> Color.LightGray
+            }
+        ),
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            content()
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun PreviewEditHiveScreen() {
+    EditHiveScreen(navController = rememberNavController(), colmeiaId = "test123")
 }
 
 @Preview(showBackground = true)
