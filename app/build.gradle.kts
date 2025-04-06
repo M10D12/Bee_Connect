@@ -92,7 +92,8 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.4.0")
 
 
-
+    implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
+    implementation("androidx.compose.ui:ui-viewbinding:1.5.4")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

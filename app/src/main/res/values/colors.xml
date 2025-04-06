@@ -7,4 +7,7 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="chart_line">#FFA000</color>
+    <color name="chart_circle">#FFC107</color>
+    <color name="chart_fill">#FFF3E0</color>
 </resources>

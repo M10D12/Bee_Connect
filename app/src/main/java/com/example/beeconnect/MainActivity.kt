@@ -104,6 +104,15 @@ class MainActivity : ComponentActivity() {
                 composable("profile"){
                     RealProfileScreen(navController = navController)
                 }
+                composable("hives") {
+                    HiveSelectionScreen(navController)
+                }
+                composable("statistics/{hiveId}") { backStackEntry ->
+                    StatisticsScreen(
+                        navController = navController,
+                        hiveId = backStackEntry.arguments?.getString("hiveId") ?: ""
+                    )
+                }
             }
         }
     }
@@ -388,7 +397,7 @@ fun BeeConnectBottomNavigation(navController: NavController) {
         )
         BottomNavigationItem(
             selected = false,
-            onClick = { /* Navegar para Estatísticas */ },
+            onClick = { navController.navigate("hives") },
             icon = {
                 Icon(
                     imageVector = Icons.Default.BarChart,
