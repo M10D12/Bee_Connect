@@ -160,7 +160,7 @@ fun StatisticsScreen(navController: NavController, hiveId: String) {
             Spacer(modifier = Modifier.height(24.dp))
 
             // Chart
-            Text("Produção de Mel (últimos 7 dias)", fontWeight = FontWeight.Bold)
+            Text("Produção de Mel por dia", fontWeight = FontWeight.Bold)
             HoneyProductionChart(harvests = harvests)
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -284,7 +284,7 @@ fun HoneyProductionChart(harvests: List<HoneyHarvest>) {
                 Entry(index.toFloat(), amount.toFloat())
             }
 
-            val dataSet = LineDataSet(entries, "Produção de Mel (kg)").apply {
+            val dataSet = LineDataSet(entries, "Mel (kg)").apply {
                 color = Color(0xFFFFA000).toArgb()
                 valueTextColor = Color.Black.toArgb()
                 lineWidth = 2f
