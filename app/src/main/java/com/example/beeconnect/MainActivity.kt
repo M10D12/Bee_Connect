@@ -43,6 +43,7 @@ import androidx.compose.material.IconButton
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
+import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -104,14 +105,17 @@ class MainActivity : ComponentActivity() {
                 composable("profile"){
                     RealProfileScreen(navController = navController)
                 }
-                composable("hives") {
-                    HiveSelectionScreen(navController)
+                composable("apiaries") {
+                    ApiarySelectionScreen(navController)
                 }
-                composable("statistics/{hiveId}") { backStackEntry ->
+                composable("statistics/{apiaryId}") { backStackEntry ->
                     StatisticsScreen(
                         navController = navController,
-                        hiveId = backStackEntry.arguments?.getString("hiveId") ?: ""
+                        apiaryId = backStackEntry.arguments?.getString("apiaryId") ?: ""
                     )
+                }
+                composable("calendar") {
+                    CalendarScreen(navController)
                 }
             }
         }
@@ -258,30 +262,49 @@ fun ApiaryCard(apiary: Apiary, navController: NavController) {
     var showDeleteDialog by remember { mutableStateOf(false) }
     var isDeleted by remember { mutableStateOf(false) }
 
-    if (isDeleted) return // Skip rendering if deleted
+    if (isDeleted) return
 
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("Confirmar exclusão") },
-            text = { Text("Tem certeza que deseja excluir este apiário?") },
+            text = { Text("Tem certeza que deseja excluir este apiário e todas as suas colmeias?") },
             confirmButton = {
                 Button(
                     onClick = {
-                        db.collection("apiarios").document(apiary.id)
-                            .delete()
-                            .addOnSuccessListener {
-                                Toast.makeText(
-                                    context,
-                                    "Apiário excluído com sucesso",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                isDeleted = true
+
+                        db.collection("colmeia")
+                            .whereEqualTo("apiaryId", apiary.id)
+                            .get()
+                            .addOnSuccessListener { hiveDocuments ->
+                                val batch = db.batch()
+                                for (document in hiveDocuments) {
+                                    batch.delete(document.reference)
+                                }
+
+                                batch.delete(db.collection("apiarios").document(apiary.id))
+
+                                batch.commit()
+                                    .addOnSuccessListener {
+                                        Toast.makeText(
+                                            context,
+                                            "Apiário e colmeias excluídos com sucesso",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        isDeleted = true
+                                    }
+                                    .addOnFailureListener { e ->
+                                        Toast.makeText(
+                                            context,
+                                            "Erro ao excluir apiário e colmeias: ${e.message}",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
                             }
                             .addOnFailureListener { e ->
                                 Toast.makeText(
                                     context,
-                                    "Erro ao excluir apiário: ${e.message}",
+                                    "Erro ao buscar colmeias para exclusão: ${e.message}",
                                     Toast.LENGTH_SHORT
                                 ).show()
                             }
@@ -397,7 +420,7 @@ fun BeeConnectBottomNavigation(navController: NavController) {
         )
         BottomNavigationItem(
             selected = false,
-            onClick = { navController.navigate("hives") },
+            onClick = { navController.navigate("apiaries") },
             icon = {
                 Icon(
                     imageVector = Icons.Default.BarChart,
@@ -421,11 +444,11 @@ fun BeeConnectBottomNavigation(navController: NavController) {
         )
         BottomNavigationItem(
             selected = false,
-            onClick = { /* Navegar para configurações */ },
+            onClick =  { navController.navigate("calendar") },
             icon = {
                 Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "Configurações"
+                    imageVector = Icons.Default.CalendarMonth,
+                    contentDescription = "Calendar"
                 )
             },
             label = null,

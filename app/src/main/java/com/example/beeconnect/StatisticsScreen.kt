@@ -1,6 +1,7 @@
 package com.example.beeconnect
 
 import android.annotation.SuppressLint
+import android.util.Log
 import android.widget.DatePicker
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,11 +12,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -28,6 +29,7 @@ import com.github.mikephil.charting.data.LineData
 import com.github.mikephil.charting.data.LineDataSet
 import com.github.mikephil.charting.formatter.IndexAxisValueFormatter
 import com.google.firebase.Timestamp
+import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import java.text.SimpleDateFormat
@@ -35,47 +37,73 @@ import java.util.*
 
 @SuppressLint("SimpleDateFormat")
 @Composable
-fun StatisticsScreen(navController: NavController, hiveId: String) {
+fun StatisticsScreen(navController: NavController, apiaryId: String) {
     val db = Firebase.firestore
+    val context = LocalContext.current
 
-    var selectedDate by rememberSaveable { mutableStateOf(Date()) }
-    var showDatePicker by rememberSaveable { mutableStateOf(false) }
-    var harvests by rememberSaveable { mutableStateOf<List<HoneyHarvest>>(emptyList()) }
-    var hiveName by rememberSaveable { mutableStateOf("") }
-    var newHarvestAmount by rememberSaveable { mutableStateOf("") }
+    // State variables
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var selectedDate by remember { mutableStateOf(Date()) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var harvests by remember { mutableStateOf<List<HoneyHarvest>>(emptyList()) }
+    var apiaryName by remember { mutableStateOf("") }
+    var newHarvestAmount by remember { mutableStateOf("") }
 
-    // Format the date for display
-    val formattedDate = rememberSaveable(selectedDate) {
+    // Format date for display
+    val formattedDate = remember(selectedDate) {
         SimpleDateFormat("yyyy-MM-dd").format(selectedDate)
     }
 
-    // Load hive name and harvest data
-    LaunchedEffect(hiveId) {
-        db.collection("colmeia").document(hiveId)
-            .get()
-            .addOnSuccessListener { doc ->
-                hiveName = doc.getString("nome") ?: "Unknown"
-            }
+    // Load data
+    LaunchedEffect(apiaryId) {
+        val user = Firebase.auth.currentUser
+        if (user == null) {
+            errorMessage = "User not authenticated"
+            isLoading = false
+            return@LaunchedEffect
+        }
+        try {
+            // 1. Get apiary info
+            db.collection("apiarios").document(apiaryId)
+                .get()
+                .addOnSuccessListener { doc ->
+                    apiaryName = doc.getString("nome") ?: "Unknown"
 
-        db.collection("honey_harvests")
-            .whereEqualTo("hiveId", hiveId)
-            .get()
-            .addOnSuccessListener { result ->
-                harvests = result.map { doc ->
-                    HoneyHarvest(
-                        hiveId = doc.getString("hiveId") ?: "",
-                        hiveName = doc.getString("hiveName") ?: "Unknown",
-                        amount = doc.getDouble("amount") ?: 0.0,
-                        date = doc.getTimestamp("date") ?: Timestamp.now()
-                    )
+                    // 2. Get harvests for this apiary
+                    db.collection("honey_harvests")
+                        .whereEqualTo("apiaryId", apiaryId)
+                        .get()
+                        .addOnSuccessListener { result ->
+                            harvests = result.map { doc ->
+                                HoneyHarvest(
+                                    apiaryId = doc.getString("apiaryId") ?: apiaryId,
+                                    apiaryName = apiaryName,
+                                    amount = doc.getDouble("amount") ?: 0.0,
+                                    date = doc.getTimestamp("date") ?: Timestamp.now()
+                                )
+                            }
+                            isLoading = false
+                        }
+                        .addOnFailureListener { e ->
+                            errorMessage = "Failed to load harvests: ${e.message}"
+                            isLoading = false
+                        }
                 }
-            }
+                .addOnFailureListener { e ->
+                    errorMessage = "Failed to load apiary: ${e.message}"
+                    isLoading = false
+                }
+        } catch (e: Exception) {
+            errorMessage = "Error: ${e.message}"
+            isLoading = false
+        }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Estatísticas de $hiveName") },
+                title = { Text("Estatísticas de $apiaryName") },
                 backgroundColor = Color(0xFFFFC107),
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
@@ -85,92 +113,110 @@ fun StatisticsScreen(navController: NavController, hiveId: String) {
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
-        ) {
-            // Date and Add Harvest Section
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Data: $formattedDate", fontWeight = FontWeight.Bold)
-                }
-
-                OutlinedButton(
-                    onClick = { showDatePicker = true },
-                    modifier = Modifier.width(120.dp)
-                ) {
-                    Text("Alterar Data")
+        when {
+            isLoading -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
                 }
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Add Harvest Section
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedTextField(
-                    value = newHarvestAmount,
-                    onValueChange = { newHarvestAmount = it },
-                    label = { Text("Quantidade (kg)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.weight(1f)
-                )
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Button(
-                    onClick = {
-                        val amount = newHarvestAmount.toDoubleOrNull() ?: 0.0
-                        if (amount > 0) {
-                            val newHarvest = HoneyHarvest(
-                                hiveId = hiveId,
-                                hiveName = hiveName,
-                                amount = amount,
-                                date = Timestamp(selectedDate)
-                            )
-
-                            // Update local state immediately
-                            harvests = harvests + newHarvest
-                            newHarvestAmount = ""
-
-                            // Push to Firestore
-                            db.collection("honey_harvests").add(
-                                mapOf(
-                                    "hiveId" to hiveId,
-                                    "hiveName" to hiveName,
-                                    "amount" to amount,
-                                    "date" to Timestamp(selectedDate)
-                                )
-                            )
+            errorMessage != null -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(text = errorMessage ?: "Error", color = Color.Red)
+                        Button(onClick = { navController.popBackStack() }) {
+                            Text("Voltar")
                         }
                     }
-                ) {
-                    Text("Adicionar")
                 }
             }
+            else -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(16.dp)
+                ) {
+                    // Date and Add Harvest Section
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Data: $formattedDate", fontWeight = FontWeight.Bold)
+                        }
+                        OutlinedButton(
+                            onClick = { showDatePicker = true },
+                            modifier = Modifier.width(120.dp)
+                        ) {
+                            Text("Alterar Data")
+                        }
+                    }
 
-            Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-            // Chart
-            Text("Produção de Mel por dia", fontWeight = FontWeight.Bold)
-            HoneyProductionChart(harvests = harvests)
+                    // Add Harvest Section
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = newHarvestAmount,
+                            onValueChange = { newHarvestAmount = it },
+                            label = { Text("Quantidade (kg)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
+                        )
 
-            Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
 
-            // Harvest List
-            Text("Registros de Colheita:", fontWeight = FontWeight.Bold)
-            LazyColumn {
-                items(harvests.sortedByDescending { it.date.toDate() }) { harvest ->
-                    HarvestItem(harvest = harvest)
-                    Divider()
+                        Button(
+                            onClick = {
+                                val amount = newHarvestAmount.toDoubleOrNull() ?: 0.0
+                                if (amount > 0) {
+                                    val newHarvest = HoneyHarvest(
+                                        apiaryId = apiaryId,
+                                        apiaryName = apiaryName,
+                                        amount = amount,
+                                        date = Timestamp(selectedDate)
+                                    )
+
+                                    // Update local state
+                                    harvests = harvests + newHarvest
+                                    newHarvestAmount = ""
+
+                                    // Add to Firestore
+                                    db.collection("honey_harvests").add(
+                                        mapOf(
+                                            "apiaryId" to apiaryId,
+                                            "apiaryName" to apiaryName,
+                                            "amount" to amount,
+                                            "date" to Timestamp(selectedDate)
+                                        )
+                                    )
+                                }
+                            }
+                        ) {
+                            Text("Adicionar")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Chart
+                    Text("Produção de Mel por dia", fontWeight = FontWeight.Bold)
+                    HoneyProductionChart(harvests = harvests)
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Harvest List
+                    Text("Registros de Colheita:", fontWeight = FontWeight.Bold)
+                    LazyColumn {
+                        items(harvests.sortedByDescending { it.date.toDate() }) { harvest ->
+                            HarvestItem(harvest = harvest)
+                            Divider()
+                        }
+                    }
                 }
             }
         }
@@ -244,7 +290,7 @@ fun HarvestItem(harvest: HoneyHarvest) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Column {
-            Text(harvest.hiveName, fontWeight = FontWeight.Bold)
+            Text(harvest.apiaryName, fontWeight = FontWeight.Bold)
             Text(
                 SimpleDateFormat("dd/MM/yyyy").format(harvest.date.toDate()),
                 fontSize = 12.sp
@@ -256,7 +302,6 @@ fun HarvestItem(harvest: HoneyHarvest) {
 
 @Composable
 fun HoneyProductionChart(harvests: List<HoneyHarvest>) {
-
     val chartData by remember(harvests) {
         derivedStateOf {
             harvests
@@ -303,8 +348,8 @@ fun HoneyProductionChart(harvests: List<HoneyHarvest>) {
 }
 
 data class HoneyHarvest(
-    val hiveId: String,
-    val hiveName: String,
+    val apiaryId: String,
+    val apiaryName: String,
     val amount: Double,
     val date: Timestamp
 )

@@ -73,38 +73,39 @@ fun MyApiariesMapScreen(navController: NavController) {
                     mapView.apply {
                         setTileSource(TileSourceFactory.MAPNIK)
                         setMultiTouchControls(true)
-                        controller.setZoom(5.0)
+                        controller.setZoom(15.0)
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
                 update = { map ->
                     if (apiaries.isNotEmpty()) {
-                        map.overlays.clear()
-
-                        val geoPoints = apiaries.map {
-                            GeoPoint(it.latitude.toDouble(), it.longitude.toDouble())
-                        }
-
-                        geoPoints.forEachIndexed { index, point ->
+                        apiaries.forEach { apiary ->
                             val marker = Marker(map).apply {
-                                position = point
-                                title = apiaries[index].name
+                                position = GeoPoint(apiary.latitude.toDouble(), apiary.longitude.toDouble())
+                                title = apiary.name
                                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                             }
                             map.overlays.add(marker)
                         }
 
-                        val boundingBox = org.osmdroid.util.BoundingBox.fromGeoPointsSafe(geoPoints)
-
-                        map.zoomToBoundingBox(boundingBox, false) // <– false para aplicar zoom depois
-                        map.controller.setCenter(boundingBox.centerWithDateLine)
-                        map.controller.setZoom(map.zoomLevelDouble - 1.5)
-
-                        map.invalidate()
+                        if (apiaries.size == 1) {
+                            val singlePoint = GeoPoint(
+                                apiaries[0].latitude.toDouble(),
+                                apiaries[0].longitude.toDouble()
+                            )
+                            map.controller.setCenter(singlePoint)
+                            map.controller.setZoom(15.0)
+                        } else if (apiaries.size > 1) {
+                            val geoPoints = apiaries.map {
+                                GeoPoint(it.latitude.toDouble(), it.longitude.toDouble())
+                            }
+                            val boundingBox = org.osmdroid.util.BoundingBox.fromGeoPointsSafe(geoPoints)
+                            map.zoomToBoundingBox(boundingBox, false)
+                            map.controller.setZoom(map.zoomLevelDouble - 1.5)
+                        }
                     }
+                    map.invalidate()
                 }
-
-
             )
         }
     }
