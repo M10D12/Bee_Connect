@@ -1,8 +1,14 @@
 package com.example.beeconnect
 
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.util.Base64
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.*
@@ -11,10 +17,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -38,37 +46,59 @@ fun ProfileScreen(
     onSaveUpdatedInfo: (String, String, String) -> Unit
 ) {
     val context = LocalContext.current
-    var showDialog by remember { mutableStateOf(false) }
+    var showDialog by rememberSaveable { mutableStateOf(false) }
+
+    var selectedImageUri by rememberSaveable { mutableStateOf<Uri?>(null) }
+    var existingImageBase64 by rememberSaveable { mutableStateOf(profilePicUrl) }
+
+    LaunchedEffect(profilePicUrl) {
+        existingImageBase64 = profilePicUrl
+        selectedImageUri = null
+    }
+
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            selectedImageUri = it
+            existingImageBase64 = null
+        }
+    }
 
     if (showDialog) {
         EditProfileDialog(
             initialName = displayName,
             initialEmail = email,
-            initialPhoto = profilePicUrl ?: "",
+            selectedImageUri = selectedImageUri,
+            existingImageBase64 = existingImageBase64,
             onDismiss = { showDialog = false },
-            onSave = { newName, newEmail, newPhotoUrl ->
+            onSave = { newName, newEmail, newPhotoUri ->
                 val uid = Firebase.auth.currentUser?.uid
                 val db = Firebase.firestore
 
                 if (uid != null) {
+                    val newPhotoBase64 = newPhotoUri?.let { encodeImageToBase64(it, context) }
+
                     db.collection("users").document(uid)
                         .update(
                             mapOf(
                                 "username" to newName,
                                 "email" to newEmail,
-                                "profilePic" to newPhotoUrl
+                                "profilePic" to newPhotoBase64
                             )
                         )
                         .addOnSuccessListener {
                             Toast.makeText(context, "Perfil atualizado!", Toast.LENGTH_SHORT).show()
-                            onSaveUpdatedInfo(newName, newEmail, newPhotoUrl)
+                            onSaveUpdatedInfo(newName, newEmail, newPhotoBase64 ?: "")
                         }
                         .addOnFailureListener {
                             Toast.makeText(context, "Erro ao atualizar", Toast.LENGTH_SHORT).show()
                         }
                 }
                 showDialog = false
-            }
+            },
+            onImageClick = { imagePickerLauncher.launch("image/*") }
         )
     }
 
@@ -95,24 +125,46 @@ fun ProfileScreen(
             }
             Spacer(modifier = Modifier.height(32.dp))
 
-            if (profilePicUrl.isNullOrBlank()) {
-                Image(
-                    painter = painterResource(id = R.drawable.bee_keeper),
-                    contentDescription = "Foto padrão",
-                    modifier = Modifier
-                        .size(120.dp)
-                        .clip(CircleShape)
-                        .background(Color.LightGray)
-                )
-            } else {
-                AsyncImage(
-                    model = profilePicUrl,
-                    contentDescription = "Foto de perfil",
-                    modifier = Modifier
-                        .size(120.dp)
-                        .clip(CircleShape)
-                        .background(Color.LightGray)
-                )
+            Box(
+                modifier = Modifier
+                    .size(120.dp)
+                    .clip(CircleShape)
+                    .background(Color.LightGray)
+                    .clickable { showDialog = true },
+                contentAlignment = Alignment.Center
+            ) {
+                when {
+                    selectedImageUri != null -> {
+                        AsyncImage(
+                            model = selectedImageUri,
+                            contentDescription = "Foto de perfil selecionada",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    !existingImageBase64.isNullOrBlank() -> {
+                        val bitmap = decodeBase64ToImageBitmap(existingImageBase64)
+                        if (bitmap != null) {
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = "Foto de perfil existente",
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Image(
+                                painter = painterResource(id = R.drawable.bee_keeper),
+                                contentDescription = "Foto padrão",
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                    else -> {
+                        Image(
+                            painter = painterResource(id = R.drawable.bee_keeper),
+                            contentDescription = "Foto padrão",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -167,7 +219,9 @@ fun RealProfileScreen(navController: NavController) {
 
     val uid = user?.uid
 
-    LaunchedEffect(uid) {
+    var refreshTrigger by remember { mutableStateOf(0) }
+
+    LaunchedEffect(uid, refreshTrigger) {  // Add refreshTrigger as a key
         if (uid != null) {
             val db = Firebase.firestore
             db.collection("users").document(uid)
@@ -194,6 +248,7 @@ fun RealProfileScreen(navController: NavController) {
             username = updatedName
             email = updatedEmail
             profilePicUrl = updatedPhotoUrl
+            refreshTrigger++
         }
     )
 }
@@ -202,19 +257,75 @@ fun RealProfileScreen(navController: NavController) {
 fun EditProfileDialog(
     initialName: String,
     initialEmail: String,
-    initialPhoto: String,
+    selectedImageUri: Uri?,
+    existingImageBase64: String?,
     onDismiss: () -> Unit,
-    onSave: (String, String, String) -> Unit
+    onSave: (String, String, Uri?) -> Unit,
+    onImageClick: () -> Unit
 ) {
     var newName by remember { mutableStateOf(initialName) }
     var newEmail by remember { mutableStateOf(initialEmail) }
-    var newPhotoUrl by remember { mutableStateOf(initialPhoto) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Editar Perfil") },
         text = {
-            Column {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Clique na imagem para alterar",
+                    style = MaterialTheme.typography.caption,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFE0E0E0))
+                        .clickable { onImageClick() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    when {
+                        selectedImageUri != null -> {
+                            AsyncImage(
+                                model = selectedImageUri,
+                                contentDescription = "Nova foto de perfil",
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                        !existingImageBase64.isNullOrBlank() -> {
+                            val bitmap = decodeBase64ToImageBitmap(existingImageBase64)
+                            if (bitmap != null) {
+                                Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = "Foto atual",
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Image(
+                                    painter = painterResource(id = R.drawable.bee_keeper),
+                                    contentDescription = "Foto padrão",
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                        else -> {
+                            Image(
+                                painter = painterResource(id = R.drawable.bee_keeper),
+                                contentDescription = "Adicionar foto",
+                                modifier = Modifier.size(60.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Name and email fields
                 OutlinedTextField(
                     value = newName,
                     onValueChange = { newName = it },
@@ -228,23 +339,28 @@ fun EditProfileDialog(
                     label = { Text("Email") },
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = newPhotoUrl,
-                    onValueChange = { newPhotoUrl = it },
-                    label = { Text("URL da Foto de Perfil") },
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
         },
-        confirmButton = {
-            Button(onClick = { onSave(newName, newEmail, newPhotoUrl) }) {
-                Text("Salvar")
-            }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = onDismiss) {
-                Text("Cancelar")
+        buttons = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.padding(end = 8.dp)
+                ) {
+                    Text("Cancelar")
+                }
+                Button(
+                    onClick = { onSave(newName, newEmail, selectedImageUri) },
+                    colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF03A9F4))
+                ) {
+                    Text("Salvar", color = Color.White)
+                }
             }
         }
     )
@@ -263,3 +379,14 @@ fun PreviewProfileScreen() {
         onSaveUpdatedInfo = { _, _, _ -> }
     )
 }
+
+fun decodeBase64ToImageBitmap(base64: String?): android.graphics.Bitmap? {
+    if (base64 == null) return null
+    return try {
+        val imageBytes = Base64.decode(base64, Base64.DEFAULT)
+        BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+    } catch (e: Exception) {
+        null
+    }
+}
+
