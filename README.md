@@ -3,7 +3,7 @@
 BeeConnect é uma aplicação Android desenvolvida para apicultores, permitindo a gestão de apiários e colmeias, visualização de dados de sensores em tempo real.
 
 ---
-👥 Equipa
+👥 Equipa:
 Miguel Francisco - 108304
 Miguel Pinto - 108481
 Gonçalo Monteiro -107758
